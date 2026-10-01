@@ -1,0 +1,10 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm 10 non esegue gli script di installazione se non autorizzati:
+# servono per scaricare la CLI di Supabase e i binari di esbuild/Tailwind.
+onlyBuiltDependencies:
+  - supabase
+  - esbuild
+  - "@tailwindcss/oxide"

@@ -1,0 +1,21 @@
+{
+  "name": "gestionale-pls",
+  "private": true,
+  "description": "Gestionale cloud per Pediatri di Libera Scelta e genitori (progetto portfolio, dati di esempio)",
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev:studio": "pnpm --filter @pls/studio dev",
+    "dev:genitori": "pnpm --filter @pls/genitori dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:start": "supabase start",
+    "db:reset": "supabase db reset",
+    "db:test": "supabase test db"
+  },
+  "devDependencies": {
+    "supabase": "^2.40.0",
+    "typescript": "~5.9.2"
+  }
+}

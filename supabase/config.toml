@@ -1,0 +1,50 @@
+# Configurazione per l'ambiente LOCALE (supabase start). Le chiavi non indicate
+# usano i valori predefiniti della CLI. Sul progetto online le stesse impostazioni
+# vanno fatte dal Dashboard (vedi README, sezione "Setup del progetto Supabase").
+project_id = "gestionale-pls"
+
+[api]
+enabled = true
+port = 54321
+# Schemi esposti via API. "pseudonimi" e "audit" NON sono esposti di proposito.
+schemas = ["public", "graphql_public", "anagrafica", "clinica", "api"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 17
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5174"]
+jwt_expiry = 900
+enable_refresh_token_rotation = true
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+otp_length = 6
+otp_expiry = 600
+
+# Il template include {{ .Token }}: così l'email contiene il codice a 6 cifre.
+[auth.email.template.magic_link]
+subject = "Il tuo codice di accesso"
+content_path = "./supabase/templates/codice_accesso.html"
+
+[auth.mfa]
+max_enrolled_factors = 3
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token_hook"
