@@ -44,7 +44,7 @@ function Applicazione({ claims }: { claims: ClaimsApp }) {
   let pagina;
   switch (rotta.sezione) {
     case 'agenda':
-      pagina = <Agenda />;
+      pagina = <Agenda claims={claims} />;
       break;
     case 'assistiti':
       pagina = rotta.id ? <SchedaPaziente key={rotta.id} id={rotta.id} claims={claims} /> : <Assistiti />;

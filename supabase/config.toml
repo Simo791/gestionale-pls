@@ -48,3 +48,8 @@ verify_enabled = true
 [auth.hook.custom_access_token]
 enabled = true
 uri = "pg-functions://postgres/public/custom_access_token_hook"
+
+# La funzione di invio è chiamata da un job pianificato con un segreto proprio,
+# non da un utente: la verifica del JWT di Supabase è quindi disattivata.
+[functions.invia-messaggi]
+verify_jwt = false

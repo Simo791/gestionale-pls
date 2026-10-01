@@ -1,8 +1,9 @@
-import type { Appuntamento, Paziente, StatoAppuntamento } from '@pls/shared';
+import type { Appuntamento, ClaimsApp, Paziente, StatoAppuntamento } from '@pls/shared';
+import NuovoAppuntamento from '../componenti/NuovoAppuntamento';
 import { useState } from 'react';
 import { Badge, Bottone, Caricamento, Errore, Pannello, Vuoto } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
-import { ETICHETTA_TIPO, STATO_APPUNTAMENTO, fmtGiornoLungo, fmtOra, isoGiorno } from '../lib/formato';
+import { ETICHETTA_TIPO, STATO_APPUNTAMENTO, fmtData, fmtGiornoLungo, fmtOra, isoGiorno } from '../lib/formato';
 import { link } from '../lib/rotta';
 import { supabase } from '../lib/supabase';
 
@@ -24,7 +25,8 @@ const piuGiorni = (d: Date, n: number) => {
 };
 
 /** Agenda settimanale: scegli il giorno, gestisci conferme ed esiti degli appuntamenti. */
-export default function Agenda() {
+export default function Agenda({ claims }: { claims: ClaimsApp }) {
+  const [nuovo, setNuovo] = useState(false);
   const [giorno, setGiorno] = useState(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -43,6 +45,21 @@ export default function Agenda() {
       ),
     [lunedi.getTime()],
   );
+
+  // Stato dei messaggi WhatsApp per gli appuntamenti della settimana
+  const messaggi = useDati(
+    async () => {
+      const ids = (settimana.dati ?? []).map((a) => a.id);
+      if (ids.length === 0) return [];
+      return q<{ appuntamento_id: string; tipo: string; giorni_prima: number; stato: string; programmato_per: string }[]>(
+        supabase.schema('anagrafica').from('messaggi_outbox')
+          .select('appuntamento_id, tipo, giorni_prima, stato, programmato_per').in('appuntamento_id', ids).neq('stato', 'annullato'),
+      );
+    },
+    [settimana.dati],
+  );
+  const messaggiPer = new Map<string, { tipo: string; giorni_prima: number; stato: string; programmato_per: string }[]>();
+  for (const m of messaggi.dati ?? []) messaggiPer.set(m.appuntamento_id, [...(messaggiPer.get(m.appuntamento_id) ?? []), m]);
 
   const delGiorno = (settimana.dati ?? []).filter(
     (a) => isoGiorno(new Date(a.inizio)) === isoGiorno(giorno) && (!soloDaConfermare || a.stato === 'richiesto'),
@@ -66,12 +83,22 @@ export default function Agenda() {
           <h1 className="text-2xl font-semibold text-slate-900">Agenda</h1>
           <p className="text-sm capitalize text-slate-500">{fmtGiornoLungo(giorno)}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Bottone variante="primario" onClick={() => setNuovo(true)}>+ Nuovo appuntamento</Bottone>
           <Bottone onClick={() => setGiorno(piuGiorni(lunedi, -7))}>‹ Settimana</Bottone>
           <Bottone onClick={() => { const d = new Date(); d.setHours(0, 0, 0, 0); setGiorno(d); }}>Oggi</Bottone>
           <Bottone onClick={() => setGiorno(piuGiorni(lunedi, 7))}>Settimana ›</Bottone>
         </div>
       </div>
+
+      {nuovo && (
+        <NuovoAppuntamento
+          claims={claims}
+          giornoIniziale={isoGiorno(giorno)}
+          onAnnulla={() => setNuovo(false)}
+          onCreato={() => { setNuovo(false); settimana.ricarica(); }}
+        />
+      )}
 
       {/* Striscia della settimana con il numero di appuntamenti per giorno */}
       <div className="grid grid-cols-7 gap-1 sm:gap-2">
@@ -125,6 +152,15 @@ export default function Agenda() {
                       {ETICHETTA_TIPO[a.tipo]}
                       {a.note_segreteria && <> · <span className="italic">{a.note_segreteria}</span></>}
                     </p>
+                    {(messaggiPer.get(a.id) ?? []).length > 0 && (
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        WhatsApp:{' '}
+                        {(messaggiPer.get(a.id) ?? []).map((m) =>
+                          `${m.tipo === 'conferma' ? 'conferma' : `promemoria ${m.giorni_prima} gg`} ${
+                            m.stato === 'in_coda' ? `(in coda, ${fmtData(m.programmato_per)})` : m.stato === 'simulato' ? '(simulato)' : `(${m.stato})`}`,
+                        ).join(' · ')}
+                      </p>
+                    )}
                   </div>
                   <Badge tono={STATO_APPUNTAMENTO[a.stato].tono}>{STATO_APPUNTAMENTO[a.stato].testo}</Badge>
                   <div className="flex gap-2">

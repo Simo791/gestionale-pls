@@ -3,6 +3,7 @@ import type {
   BilancioInScadenza,
   ClaimsApp,
   ConsensoIncompleto,
+  ControlloInScadenza,
   EsitoVerificaAudit,
   EventoAttivita,
   Paziente,
@@ -60,6 +61,10 @@ export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
   const consensi = useDati(() => q<ConsensoIncompleto[]>(api().rpc('consensi_incompleti')), []);
   const audit = useDati(
     async () => (isPediatra ? (await q<EsitoVerificaAudit[]>(api().rpc('verifica_audit')))[0] ?? null : null),
+    [isPediatra],
+  );
+  const controlli = useDati(
+    async () => (isPediatra ? q<ControlloInScadenza[]>(api().rpc('controlli_in_scadenza', { p_giorni: 30 })) : []),
     [isPediatra],
   );
   const attivita = useDati(
@@ -157,6 +162,26 @@ export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
             </ul>
           )}
         </Pannello>
+
+        {isPediatra && (
+          <Pannello titolo="Screening e controlli in scadenza" sottotitolo="Prossimi 30 giorni e scaduti senza esito">
+            {controlli.errore ? <Errore messaggio={controlli.errore} /> : controlli.caricamento ? <Caricamento /> :
+              controlli.dati?.length === 0 ? <Vuoto testo="Nessun controllo in scadenza." /> : (
+              <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
+                {controlli.dati?.map((c) => (
+                  <li key={`${c.paziente_id}-${c.codice}`} className="flex items-center gap-3 py-2 text-sm">
+                    <a href={link('assistiti', c.paziente_id)} className="flex-1 truncate text-slate-800 hover:underline">
+                      {c.cognome} {c.nome}
+                      <span className="ml-2 text-slate-500">{c.controllo}</span>
+                    </a>
+                    <span className="tabular-nums text-slate-600">entro {fmtGiornoIso(c.al)}</span>
+                    {c.scaduto && <Badge tono="errore">Scaduto</Badge>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Pannello>
+        )}
 
         {isPediatra ? (
           <Pannello titolo="Attività recente" sottotitolo="Dal registro di audit"

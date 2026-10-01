@@ -1,6 +1,9 @@
 import {
   etaDaGiorni,
+  etaInGiorni,
   etaLeggibile,
+  fmtPercentile,
+  percentileMisura,
   type Appuntamento,
   type CartellaClinica,
   type ClaimsApp,
@@ -13,6 +16,8 @@ import {
   type Visita,
 } from '@pls/shared';
 import { useState } from 'react';
+import ControlliScreening from '../componenti/ControlliScreening';
+import GraficoCrescita from '../componenti/GraficoCrescita';
 import { Badge, Bottone, Caricamento, Errore, Pannello, Vuoto } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
 import {
@@ -39,6 +44,7 @@ interface Relazione {
 type PazienteScheda = Paziente & { relazioni_tutela: Relazione[] };
 
 interface DatiClinici {
+  pseudo: string;
   cartella: CartellaClinica | null;
   misure: Misurazione[];
   vaccini: Vaccinazione[];
@@ -95,7 +101,7 @@ export default function SchedaPaziente({ id, claims }: { id: string; claims: Cla
         q<Vaccinazione[]>(cli.from('vaccinazioni').select('*').eq('pseudo_id', pseudo).order('data', { ascending: false })),
         q<Visita[]>(cli.from('visite').select('*').eq('pseudo_id', pseudo).order('data', { ascending: false }).limit(10)),
       ]);
-      setClinica({ cartella, misure, vaccini, visite });
+      setClinica({ pseudo, cartella, misure, vaccini, visite });
     } catch (e) {
       setErroreAzione(e instanceof Error ? e.message : String(e));
     } finally {
@@ -244,14 +250,14 @@ export default function SchedaPaziente({ id, claims }: { id: string; claims: Cla
           </Bottone>
         </Pannello>
       ) : (
-        <CartellaAperta dati={clinica} />
+        <CartellaAperta dati={clinica} paziente={p} />
       )}
     </div>
   );
 }
 
-function CartellaAperta({ dati }: { dati: DatiClinici }) {
-  const { cartella, misure, vaccini, visite } = dati;
+function CartellaAperta({ dati, paziente }: { dati: DatiClinici; paziente: Paziente }) {
+  const { pseudo, cartella, misure, vaccini, visite } = dati;
   return (
     <div className="space-y-6">
       <Pannello titolo="Cartella clinica" sottotitolo="Apertura registrata nel registro di audit">
@@ -275,8 +281,21 @@ function CartellaAperta({ dati }: { dati: DatiClinici }) {
         </dl>
       </Pannello>
 
+      <Pannello titolo="Screening e controlli" sottotitolo="Finestre raccomandate per età, esiti registrati e fonti">
+        <ControlliScreening pseudoId={pseudo} dataNascita={paziente.data_nascita} fattoriRischio={cartella?.fattori_rischio ?? []} />
+      </Pannello>
+
+      <Pannello titolo="Curve di crescita" sottotitolo="Misurazioni del bambino sui percentili OMS · passa sopra un punto per i dettagli">
+        <GraficoCrescita
+          sesso={paziente.sesso}
+          etaOggiGiorni={etaInGiorni(paziente.data_nascita, oggiIso())}
+          misure={misure}
+          nome={paziente.nome}
+        />
+      </Pannello>
+
       <div className="grid gap-6 lg:grid-cols-2">
-        <Pannello titolo="Crescita" sottotitolo="Misurazioni ai bilanci di salute">
+        <Pannello titolo="Misurazioni" sottotitolo="Valori e percentili OMS (informativi, non un giudizio clinico)">
           {misure.length === 0 ? <Vuoto testo="Nessuna misurazione." /> : (
             <div className="-mx-4 overflow-x-auto">
               <table className="w-full text-left text-sm tabular-nums">
@@ -293,9 +312,18 @@ function CartellaAperta({ dati }: { dati: DatiClinici }) {
                   {misure.map((m) => (
                     <tr key={m.id}>
                       <td className="px-4 py-1.5 text-slate-800">{etaDaGiorni(m.eta_giorni)}</td>
-                      <td className="px-4 py-1.5">{m.peso_kg ?? '—'}</td>
-                      <td className="px-4 py-1.5">{m.altezza_cm ?? '—'}</td>
-                      <td className="px-4 py-1.5">{m.circonferenza_cranica_cm ?? '—'}</td>
+                      <td className="px-4 py-1.5">
+                        {m.peso_kg ?? '—'}
+                        {m.peso_kg !== null && <span className="ml-1 text-xs text-slate-500">{fmtPercentile(percentileMisura('peso', paziente.sesso, m.eta_giorni, m.peso_kg))}</span>}
+                      </td>
+                      <td className="px-4 py-1.5">
+                        {m.altezza_cm ?? '—'}
+                        {m.altezza_cm !== null && <span className="ml-1 text-xs text-slate-500">{fmtPercentile(percentileMisura('altezza', paziente.sesso, m.eta_giorni, m.altezza_cm))}</span>}
+                      </td>
+                      <td className="px-4 py-1.5">
+                        {m.circonferenza_cranica_cm ?? '—'}
+                        {m.circonferenza_cranica_cm !== null && <span className="ml-1 text-xs text-slate-500">{fmtPercentile(percentileMisura('circonferenza_cranica', paziente.sesso, m.eta_giorni, m.circonferenza_cranica_cm))}</span>}
+                      </td>
                       <td className="px-4 py-1.5">{m.bmi ?? '—'}</td>
                     </tr>
                   ))}

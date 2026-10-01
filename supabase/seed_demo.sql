@@ -203,3 +203,37 @@ begin
   raise notice 'Dati demo creati: % bambini.', array_length(v_pazienti, 1);
 end;
 $$;
+
+-- =============================================================================
+-- Esiti dei controlli e screening già superati (richiede la migrazione 1000).
+-- Rieseguibile: se trova già degli esiti, non fa nulla.
+-- =============================================================================
+do $$
+begin
+  if exists (select 1 from clinica.controlli_eseguiti) then
+    raise notice 'Esiti dei controlli già presenti: nessuna modifica.';
+    return;
+  end if;
+  perform setseed(0.17);
+
+  -- Qualche bambino con fattori di rischio audiologico (dato di esempio)
+  update clinica.cartelle set fattori_rischio = array['Ricovero in terapia intensiva neonatale > 5 giorni']
+  where pseudo_id in (select pseudo_id from clinica.cartelle order by pseudo_id limit 3);
+
+  insert into clinica.controlli_eseguiti (pseudo_id, codice_controllo, data, esito, note, registrato_da)
+  select m.pseudo_id, c.codice,
+         least(p.data_nascita + c.finestra_da_giorni + (random() * (c.finestra_a_giorni - c.finestra_da_giorni))::int, current_date),
+         case when random() < 0.93 then 'nella_norma' else 'da_approfondire' end,
+         null, 'a0000000-0000-4000-8000-000000000001'
+  from anagrafica.pazienti p
+  join pseudonimi.mappa m on m.paziente_id = p.id
+  join clinica.cartelle ca on ca.pseudo_id = m.pseudo_id
+  cross join anagrafica.catalogo_controlli c
+  where p.studio_id = 'c0000000-0000-4000-8000-000000000001'
+    and (c.destinatari = 'tutti' or cardinality(ca.fattori_rischio) > 0)
+    and p.data_nascita + c.finestra_a_giorni < current_date - 20   -- finestra chiusa da un po'
+    and random() < 0.9;                                           -- qualche controllo mancante, per realismo
+
+  raise notice 'Esiti dei controlli creati.';
+end;
+$$;

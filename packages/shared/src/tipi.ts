@@ -107,6 +107,7 @@ export interface CartellaClinica {
   allergie: string[];
   patologie_croniche: string[];
   note_anamnesi: string | null;
+  fattori_rischio: string[];
   aggiornata_il: ISODateTime;
 }
 
@@ -184,4 +185,39 @@ export interface EventoAttivita {
   azione: string;
   tabella: string | null;
   paziente: string | null;
+}
+
+export interface ControlloCatalogo {
+  codice: string;
+  nome: string;
+  descrizione: string;
+  azione_pediatra: string;
+  finestra_da_giorni: number;
+  finestra_a_giorni: number;
+  destinatari: 'tutti' | 'fattori_rischio';
+  fonte: string;
+  fonte_url: string;
+  ordine: number;
+}
+
+export type EsitoControllo = 'nella_norma' | 'da_approfondire' | 'inviato_specialista' | 'non_eseguibile';
+
+export interface ControlloEseguito {
+  id: UUID;
+  pseudo_id: PseudoId;
+  codice_controllo: string;
+  data: ISODate;
+  esito: EsitoControllo;
+  note: string | null;
+}
+
+export interface ControlloInScadenza {
+  paziente_id: UUID;
+  nome: string;
+  cognome: string;
+  codice: string;
+  controllo: string;
+  dal: ISODate;
+  al: ISODate;
+  scaduto: boolean;
 }
