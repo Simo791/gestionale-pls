@@ -237,3 +237,23 @@ begin
   raise notice 'Esiti dei controlli creati.';
 end;
 $$;
+
+-- =============================================================================
+-- Allergie strutturate di esempio (richiede la migrazione 1100). Rieseguibile.
+-- =============================================================================
+do $$
+begin
+  if exists (select 1 from clinica.allergie) then
+    raise notice 'Allergie già presenti: nessuna modifica.';
+    return;
+  end if;
+  insert into clinica.allergie (pseudo_id, allergene, reazione, gravita, stato, test, data_diagnosi)
+  select c.pseudo_id, 'betalattamici', 'Orticaria diffusa dopo amoxicillina', 'moderata', 'sospetta', '{}', current_date - 200
+  from clinica.cartelle c where 'Amoxicillina' = any(c.allergie);
+  insert into clinica.allergie (pseudo_id, allergene, reazione, gravita, stato, test, data_diagnosi)
+  select c.pseudo_id, 'latte', 'Vomito e orticaria dopo assunzione di latte vaccino', 'moderata', 'confermata',
+         array['prick', 'ige_specifiche', 'tpo'], current_date - 300
+  from clinica.cartelle c where 'Proteine del latte vaccino' = any(c.allergie);
+  raise notice 'Allergie di esempio create.';
+end;
+$$;

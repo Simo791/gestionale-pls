@@ -1,1 +1,23 @@
 @import "tailwindcss";
+
+/* Esportazione PDF: in stampa si vede solo il documento, in formato A4 */
+.documento-stampa {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 14mm 16mm;
+  }
+  #root {
+    display: none !important;
+  }
+  .documento-stampa {
+    display: block;
+  }
+  html,
+  body {
+    background: #ffffff !important;
+  }
+}

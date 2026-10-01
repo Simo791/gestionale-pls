@@ -5,6 +5,7 @@ import { useRotta } from './lib/rotta';
 import { esci, useSessione } from './lib/sessione';
 import { supabase } from './lib/supabase';
 import Accesso from './pagine/Accesso';
+import Account from './pagine/Account';
 import Agenda from './pagine/Agenda';
 import Assistiti from './pagine/Assistiti';
 import Consensi from './pagine/Consensi';
@@ -54,6 +55,9 @@ function Applicazione({ claims }: { claims: ClaimsApp }) {
       break;
     case 'registro':
       pagina = claims.app_ruolo === 'pediatra' ? <Registro /> : <Cruscotto claims={claims} />;
+      break;
+    case 'account':
+      pagina = <Account claims={claims} />;
       break;
     default:
       pagina = <Cruscotto claims={claims} />;

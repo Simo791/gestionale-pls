@@ -17,6 +17,7 @@ const VOCI: Voce[] = [
   { sezione: 'assistiti', etichetta: 'Assistiti', icona: 'M16 19v-1a4 4 0 00-4-4H8a4 4 0 00-4 4v1M10 10a3 3 0 100-6 3 3 0 000 6M20 19v-1a4 4 0 00-3-3.9M15 4.1a3 3 0 010 5.8' },
   { sezione: 'consensi', etichetta: 'Consensi', icona: 'M9 12l2 2 4-4M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z' },
   { sezione: 'registro', etichetta: 'Registro accessi', icona: 'M9 5h10M9 12h10M9 19h10M5 5h.01M5 12h.01M5 19h.01', soloPediatra: true },
+  { sezione: 'account', etichetta: 'Account', icona: 'M12 12a4 4 0 100-8 4 4 0 000 8M4 21v-1a6 6 0 016-6h4a6 6 0 016 6v1' },
 ];
 
 const Icona = ({ d }: { d: string }) => (

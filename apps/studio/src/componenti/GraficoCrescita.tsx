@@ -48,14 +48,17 @@ interface Props {
   etaOggiGiorni: number;
   misure: Misurazione[];
   nome: string;
+  /** Per la stampa: mostra un solo indicatore, senza schede né interazioni. */
+  indicatoreFisso?: Indicatore;
 }
 
 /**
  * Curve di crescita OMS (percentili 3–15–50–85–97) con le misurazioni del bambino.
  * Un solo asse Y per grafico; un grafico per indicatore, scelto con le schede.
  */
-export default function GraficoCrescita({ sesso, etaOggiGiorni, misure, nome }: Props) {
-  const [indicatore, setIndicatore] = useState<Indicatore>('peso');
+export default function GraficoCrescita({ sesso, etaOggiGiorni, misure, nome, indicatoreFisso }: Props) {
+  const [indicatoreScelto, setIndicatore] = useState<Indicatore>('peso');
+  const indicatore = indicatoreFisso ?? indicatoreScelto;
   const [attivo, setAttivo] = useState<number | null>(null);
 
   const def = INDICATORI.find((i) => i.id === indicatore)!;
@@ -92,7 +95,8 @@ export default function GraficoCrescita({ sesso, etaOggiGiorni, misure, nome }: 
 
   return (
     <div>
-      <div role="tablist" aria-label="Indicatore" className="mb-3 flex flex-wrap gap-1">
+      {indicatoreFisso && <p className="mb-1 font-semibold">{INDICATORI.find((i) => i.id === indicatoreFisso)?.etichetta} ({INDICATORI.find((i) => i.id === indicatoreFisso)?.unita})</p>}
+      {!indicatoreFisso && <div role="tablist" aria-label="Indicatore" className="mb-3 flex flex-wrap gap-1">
         {INDICATORI.map((i) => {
           const disponibile = i.id !== 'circonferenza_cranica' || etaOggiGiorni / GIORNI_PER_MESE <= 72;
           if (!disponibile) return null;
@@ -110,7 +114,7 @@ export default function GraficoCrescita({ sesso, etaOggiGiorni, misure, nome }: 
             </button>
           );
         })}
-      </div>
+      </div>}
 
       <div className="relative">
         <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img"
@@ -154,13 +158,13 @@ export default function GraficoCrescita({ sesso, etaOggiGiorni, misure, nome }: 
               <g key={i}>
                 <circle cx={cx} cy={cy} r={attivo === i ? 6 : 4.5} fill={SERIE} stroke="#ffffff" strokeWidth="2" />
                 {/* Area di aggancio più grande del punto, anche da tastiera */}
-                <circle
+                {!indicatoreFisso && <circle
                   cx={cx} cy={cy} r={14} fill="transparent" tabIndex={0}
                   aria-label={`${etaDaGiorni(p.giorni)}: ${p.valore} ${def.unita}`}
                   onMouseEnter={() => setAttivo(i)} onMouseLeave={() => setAttivo(null)}
                   onFocus={() => setAttivo(i)} onBlur={() => setAttivo(null)}
                   style={{ cursor: 'default', outline: 'none' }}
-                />
+                />}
               </g>
             );
           })}

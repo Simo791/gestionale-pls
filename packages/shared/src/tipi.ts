@@ -17,6 +17,8 @@ export interface Studio {
   asl: string;
   indirizzo: string;
   telefono: string | null;
+  email: string | null;
+  pec: string | null;
 }
 
 export interface Pediatra {
@@ -27,6 +29,14 @@ export interface Pediatra {
   codice_regionale: string;
   email: string;
   massimale_assistiti: number;
+  titolo: string;
+  specializzazione: string;
+  ordine_provincia: string | null;
+  ordine_numero: string | null;
+  partita_iva: string | null;
+  codice_fiscale: string | null;
+  telefono: string | null;
+  pec: string | null;
 }
 
 export interface Paziente {
@@ -220,4 +230,47 @@ export interface ControlloInScadenza {
   dal: ISODate;
   al: ISODate;
   scaduto: boolean;
+}
+
+export interface DoseCalendario {
+  codice: string;
+  vaccino: string;
+  dose: number;
+  eta_da_giorni: number;
+  eta_a_giorni: number;
+  obbligatoria: boolean;
+  quando: string;
+  note: string | null;
+  ordine: number;
+}
+
+export type CategoriaAllergene = 'alimento' | 'farmaco' | 'inalante' | 'veleno' | 'contatto';
+
+export interface Allergene {
+  codice: string;
+  nome: string;
+  categoria: CategoriaAllergene;
+  note: string | null;
+  ordine: number;
+}
+
+export interface TestAllergologico {
+  codice: string;
+  nome: string;
+  descrizione: string;
+  quando: string;
+  ordine: number;
+}
+
+export interface AllergiaPaziente {
+  id: UUID;
+  pseudo_id: PseudoId;
+  allergene: string;
+  dettaglio: string | null;
+  reazione: string | null;
+  gravita: 'lieve' | 'moderata' | 'grave' | 'anafilassi';
+  stato: 'sospetta' | 'confermata' | 'risolta';
+  test: string[];
+  data_diagnosi: ISODate | null;
+  note: string | null;
 }

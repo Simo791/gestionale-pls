@@ -142,3 +142,8 @@ update clinica.cartelle c
 set allergie = array['Nessuna allergia nota'], note_anamnesi = 'Nato a termine, allattamento materno.'
 from pseudonimi.mappa m
 where m.pseudo_id = c.pseudo_id and m.paziente_id = 'd0000000-0000-4000-8000-000000000001';
+
+-- Profilo professionale di esempio del pediatra (dati inventati)
+update anagrafica.pediatri set ordine_provincia = 'Catanzaro', ordine_numero = '00000',
+  partita_iva = '00000000000', telefono = '0000 000000'
+where id = 'a0000000-0000-4000-8000-000000000001';

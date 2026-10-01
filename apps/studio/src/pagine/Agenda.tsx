@@ -1,6 +1,8 @@
 import type { Appuntamento, ClaimsApp, Paziente, StatoAppuntamento } from '@pls/shared';
 import NuovoAppuntamento from '../componenti/NuovoAppuntamento';
 import { useState } from 'react';
+import { DocumentoStampa, TabellaStampa, useStampa } from '../componenti/Stampa';
+import { useIntestazione } from '../lib/intestazione';
 import { Badge, Bottone, Caricamento, Errore, Pannello, Vuoto } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
 import { ETICHETTA_TIPO, STATO_APPUNTAMENTO, fmtData, fmtGiornoLungo, fmtOra, isoGiorno } from '../lib/formato';
@@ -35,6 +37,8 @@ export default function Agenda({ claims }: { claims: ClaimsApp }) {
   const [soloDaConfermare, setSoloDaConfermare] = useState(false);
   const [inCorso, setInCorso] = useState<string | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
+  const { stampa, portale } = useStampa();
+  const intestazione = useIntestazione(claims.app_ruolo === 'pediatra' ? claims.sub : null);
 
   const lunedi = lunediDi(giorno);
   const settimana = useDati(
@@ -76,8 +80,28 @@ export default function Agenda({ claims }: { claims: ClaimsApp }) {
 
   const adesso = Date.now();
 
+  function esportaGiorno() {
+    const righe = (settimana.dati ?? []).filter((a) => isoGiorno(new Date(a.inizio)) === isoGiorno(giorno) && a.stato !== 'annullato');
+    stampa(
+      <DocumentoStampa titolo={`Agenda del ${fmtGiornoLungo(giorno)}`} studio={intestazione.studio} medico={intestazione.medico}>
+        <TabellaStampa
+          intestazioni={['Orario', 'Assistito', 'Tipo', 'Stato', 'Note']}
+          righe={righe.map((a) => [
+            `${fmtOra(a.inizio)}–${fmtOra(a.fine)}`,
+            a.pazienti ? `${a.pazienti.cognome} ${a.pazienti.nome}` : null,
+            ETICHETTA_TIPO[a.tipo],
+            STATO_APPUNTAMENTO[a.stato].testo,
+            a.note_segreteria,
+          ])}
+        />
+        {righe.length === 0 && <p>Nessun appuntamento.</p>}
+      </DocumentoStampa>,
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {portale}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Agenda</h1>
@@ -85,6 +109,7 @@ export default function Agenda({ claims }: { claims: ClaimsApp }) {
         </div>
         <div className="flex flex-wrap gap-2">
           <Bottone variante="primario" onClick={() => setNuovo(true)}>+ Nuovo appuntamento</Bottone>
+          <Bottone onClick={esportaGiorno} disabled={settimana.caricamento}>Esporta PDF del giorno</Bottone>
           <Bottone onClick={() => setGiorno(piuGiorni(lunedi, -7))}>‹ Settimana</Bottone>
           <Bottone onClick={() => { const d = new Date(); d.setHours(0, 0, 0, 0); setGiorno(d); }}>Oggi</Bottone>
           <Bottone onClick={() => setGiorno(piuGiorni(lunedi, 7))}>Settimana ›</Bottone>

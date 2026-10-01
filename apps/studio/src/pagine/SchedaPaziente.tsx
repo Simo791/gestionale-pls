@@ -4,8 +4,14 @@ import {
   etaLeggibile,
   fmtPercentile,
   percentileMisura,
+  type Allergene,
+  type AllergiaPaziente,
   type Appuntamento,
   type CartellaClinica,
+  type ControlloCatalogo,
+  type ControlloEseguito,
+  type DoseCalendario,
+  type TestAllergologico,
   type ClaimsApp,
   type Consenso,
   type FinalitaConsenso,
@@ -16,7 +22,12 @@ import {
   type Visita,
 } from '@pls/shared';
 import { useState } from 'react';
+import Allergie from '../componenti/Allergie';
 import ControlliScreening from '../componenti/ControlliScreening';
+import LibrettoVaccinale, { righeLibretto } from '../componenti/LibrettoVaccinale';
+import { useStampa, type DatiBambino } from '../componenti/Stampa';
+import { useIntestazione } from '../lib/intestazione';
+import { docAllergie, docAnagrafica, docCrescita, docScreening, docVaccini, docVisite, type BaseDocumento } from './esportazioni';
 import GraficoCrescita from '../componenti/GraficoCrescita';
 import { Badge, Bottone, Caricamento, Errore, Pannello, Vuoto } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
@@ -63,6 +74,7 @@ export default function SchedaPaziente({ id, claims }: { id: string; claims: Cla
   const [clinica, setClinica] = useState<DatiClinici | null>(null);
   const [erroreAzione, setErroreAzione] = useState<string | null>(null);
   const [apertura, setApertura] = useState(false);
+  const { stampa, portale } = useStampa();
 
   const paziente = useDati(
     () =>
@@ -81,6 +93,8 @@ export default function SchedaPaziente({ id, claims }: { id: string; claims: Cla
     () => q<Appuntamento[]>(ana().from('appuntamenti').select('*').eq('paziente_id', id).order('inizio', { ascending: false }).limit(10)),
     [id],
   );
+
+  const intestazione = useIntestazione(paziente.dati?.pediatra_id);
 
   async function mostraCf() {
     setErroreAzione(null);
@@ -123,16 +137,93 @@ export default function SchedaPaziente({ id, claims }: { id: string; claims: Cla
     else consensi.ricarica();
   }
 
+  async function ricaricaVaccini() {
+    if (!clinica) return;
+    const vaccini = await q<Vaccinazione[]>(supabase.schema('clinica').from('vaccinazioni').select('*').eq('pseudo_id', clinica.pseudo).order('data', { ascending: false }));
+    setClinica({ ...clinica, vaccini });
+  }
+
+  /** Dati per l'intestazione dei documenti; il codice fiscale si legge (con traccia in audit) solo se serve. */
+  async function baseDocumento(): Promise<BaseDocumento | null> {
+    const p = paziente.dati;
+    if (!p) return null;
+    let codice = cf;
+    if (!codice) {
+      const { data, error } = await supabase.schema('api').rpc('codice_fiscale', { p_paziente_id: id });
+      if (error) {
+        setErroreAzione(error.message);
+        return null;
+      }
+      codice = data as string;
+      setCf(codice);
+    }
+    const bambino: DatiBambino = {
+      nome: p.nome,
+      cognome: p.cognome,
+      sesso: p.sesso,
+      dataNascita: p.data_nascita,
+      codiceFiscale: codice,
+      genitori: p.relazioni_tutela.filter((r) => r.tutori).map((r) => ({
+        nome: r.tutori!.nome, cognome: r.tutori!.cognome, tipo: r.tipo, telefono: r.tutori!.telefono,
+      })),
+    };
+    return { studio: intestazione.studio, medico: intestazione.medico, bambino };
+  }
+
+  async function esporta(tipo: 'anagrafica' | 'vaccini' | 'crescita' | 'screening' | 'allergie' | 'visite') {
+    setErroreAzione(null);
+    try {
+      const base = await baseDocumento();
+      const p = paziente.dati;
+      if (!base || !p) return;
+      if (tipo === 'anagrafica') {
+        const genitori = p.relazioni_tutela.filter((r) => r.tutori).map((r) => ({
+          id: r.tutori!.id, nome: r.tutori!.nome, cognome: r.tutori!.cognome, tipo: r.tipo,
+          email: r.tutori!.email, telefono: r.tutori!.telefono, responsabilita: r.responsabilita_genitoriale,
+        }));
+        return stampa(docAnagrafica(base, genitori, correntiConsensi(), appuntamenti.dati ?? []));
+      }
+      if (!clinica) return setErroreAzione('Apri prima la cartella clinica.');
+      if (tipo === 'vaccini') {
+        const cal = await q<DoseCalendario[]>(ana().from('calendario_vaccinale').select('*').order('ordine'));
+        return stampa(docVaccini(base, righeLibretto(cal, clinica.vaccini, p.data_nascita)));
+      }
+      if (tipo === 'crescita') return stampa(docCrescita(base, p, clinica.misure));
+      if (tipo === 'visite') return stampa(docVisite(base, clinica.visite));
+      if (tipo === 'screening') {
+        const [catalogo, esiti] = await Promise.all([
+          q<ControlloCatalogo[]>(ana().from('catalogo_controlli').select('*').order('ordine')),
+          q<ControlloEseguito[]>(supabase.schema('clinica').from('controlli_eseguiti').select('*').eq('pseudo_id', clinica.pseudo)),
+        ]);
+        const visibili = catalogo.filter((c) => c.destinatari === 'tutti' || (clinica.cartella?.fattori_rischio.length ?? 0) > 0);
+        return stampa(docScreening(base, visibili, esiti, p.data_nascita));
+      }
+      const [allergie, allergeni, test] = await Promise.all([
+        q<AllergiaPaziente[]>(supabase.schema('clinica').from('allergie').select('*').eq('pseudo_id', clinica.pseudo).order('creato_il')),
+        q<Allergene[]>(ana().from('catalogo_allergeni').select('*')),
+        q<TestAllergologico[]>(ana().from('catalogo_test_allergologici').select('*')),
+      ]);
+      return stampa(docAllergie(base, allergie, allergeni, test));
+    } catch (e) {
+      setErroreAzione(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function correntiConsensi() {
+    const mappa = new Map<string, Consenso>();
+    for (const c of consensi.dati ?? []) {
+      const chiave = `${c.tutore_id}|${c.finalita}`;
+      if (!mappa.has(chiave)) mappa.set(chiave, c);
+    }
+    return mappa;
+  }
+
   if (paziente.errore) return <Errore messaggio={paziente.errore} />;
   if (paziente.caricamento || !paziente.dati) return <Caricamento righe={6} />;
   const p = paziente.dati;
 
   // Ultima dichiarazione per (tutore, finalità): i consensi sono uno storico.
-  const correnti = new Map<string, Consenso>();
-  for (const c of consensi.dati ?? []) {
-    const chiave = `${c.tutore_id}|${c.finalita}`;
-    if (!correnti.has(chiave)) correnti.set(chiave, c);
-  }
+  const correnti = correntiConsensi();
 
   return (
     <div className="space-y-6">
@@ -142,6 +233,22 @@ export default function SchedaPaziente({ id, claims }: { id: string; claims: Cla
         <p className="text-sm text-slate-500">
           {p.sesso === 'M' ? 'Maschio' : 'Femmina'} · nato/a il {fmtGiornoIso(p.data_nascita)} · {etaLeggibile(p.data_nascita, oggiIso())}
         </p>
+      </div>
+
+      {portale}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <span className="text-sm font-medium text-slate-700">Esporta PDF:</span>
+        <Bottone onClick={() => void esporta('anagrafica')}>Anagrafica e consensi</Bottone>
+        {clinica ? (
+          <>
+            <Bottone onClick={() => void esporta('vaccini')}>Libretto vaccinale</Bottone>
+            <Bottone onClick={() => void esporta('crescita')}>Curve di crescita</Bottone>
+            <Bottone onClick={() => void esporta('screening')}>Screening e controlli</Bottone>
+            <Bottone onClick={() => void esporta('allergie')}>Allergie</Bottone>
+            <Bottone onClick={() => void esporta('visite')}>Visite</Bottone>
+          </>
+        ) : puoVedereClinica && <span className="text-xs text-slate-500">Apri la cartella clinica per esportare i documenti clinici.</span>}
+        <span className="w-full text-xs text-slate-500">Si apre la stampa del browser: scegli «Salva come PDF». Il codice fiscale nel documento viene letto con traccia nel registro.</span>
       </div>
 
       {erroreAzione && <Errore messaggio={erroreAzione} />}
@@ -250,24 +357,18 @@ export default function SchedaPaziente({ id, claims }: { id: string; claims: Cla
           </Bottone>
         </Pannello>
       ) : (
-        <CartellaAperta dati={clinica} paziente={p} />
+        <CartellaAperta dati={clinica} paziente={p} onVacciniCambiati={() => void ricaricaVaccini()} />
       )}
     </div>
   );
 }
 
-function CartellaAperta({ dati, paziente }: { dati: DatiClinici; paziente: Paziente }) {
+function CartellaAperta({ dati, paziente, onVacciniCambiati }: { dati: DatiClinici; paziente: Paziente; onVacciniCambiati: () => void }) {
   const { pseudo, cartella, misure, vaccini, visite } = dati;
   return (
     <div className="space-y-6">
       <Pannello titolo="Cartella clinica" sottotitolo="Apertura registrata nel registro di audit">
-        <dl className="grid gap-4 text-sm sm:grid-cols-3">
-          <div>
-            <dt className="text-slate-500">Allergie</dt>
-            <dd className="mt-1 flex flex-wrap gap-1">
-              {cartella?.allergie.length ? cartella.allergie.map((a) => <Badge key={a} tono="errore">{a}</Badge>) : 'Nessuna nota'}
-            </dd>
-          </div>
+        <dl className="grid gap-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-slate-500">Patologie croniche</dt>
             <dd className="mt-1 flex flex-wrap gap-1">
@@ -279,6 +380,14 @@ function CartellaAperta({ dati, paziente }: { dati: DatiClinici; paziente: Pazie
             <dd className="mt-1 text-slate-700">{cartella?.note_anamnesi ?? '—'}</dd>
           </div>
         </dl>
+      </Pannello>
+
+      <Pannello titolo="Allergie" sottotitolo="Allergeni, reazione, gravità e test eseguiti">
+        <Allergie pseudoId={pseudo} legacy={cartella?.allergie ?? []} />
+      </Pannello>
+
+      <Pannello titolo="Libretto vaccinale" sottotitolo="Calendario nazionale, dosi eseguite e scadenze">
+        <LibrettoVaccinale pseudoId={pseudo} dataNascita={paziente.data_nascita} vaccini={vaccini} onCambiato={onVacciniCambiati} />
       </Pannello>
 
       <Pannello titolo="Screening e controlli" sottotitolo="Finestre raccomandate per età, esiti registrati e fonti">
@@ -294,7 +403,7 @@ function CartellaAperta({ dati, paziente }: { dati: DatiClinici; paziente: Pazie
         />
       </Pannello>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div>
         <Pannello titolo="Misurazioni" sottotitolo="Valori e percentili OMS (informativi, non un giudizio clinico)">
           {misure.length === 0 ? <Vuoto testo="Nessuna misurazione." /> : (
             <div className="-mx-4 overflow-x-auto">
@@ -333,19 +442,6 @@ function CartellaAperta({ dati, paziente }: { dati: DatiClinici; paziente: Pazie
           )}
         </Pannello>
 
-        <Pannello titolo="Vaccinazioni" sottotitolo={`${vaccini.length} dosi registrate`}>
-          {vaccini.length === 0 ? <Vuoto testo="Nessuna vaccinazione registrata." /> : (
-            <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
-              {vaccini.map((v) => (
-                <li key={v.id} className="flex items-center gap-3 py-1.5 text-sm">
-                  <span className="w-24 tabular-nums text-slate-600">{fmtGiornoIso(v.data)}</span>
-                  <span className="flex-1 text-slate-800">{v.vaccino}</span>
-                  <Badge>Dose {v.dose}</Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Pannello>
       </div>
 
       <Pannello titolo="Visite" sottotitolo="Le ultime 10">
