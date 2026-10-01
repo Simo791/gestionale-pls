@@ -53,3 +53,7 @@ uri = "pg-functions://postgres/public/custom_access_token_hook"
 # non da un utente: la verifica del JWT di Supabase è quindi disattivata.
 [functions.invia-messaggi]
 verify_jwt = false
+
+# Gestione dello staff: chiamata dall'app con il JWT dell'amministratore.
+[functions.gestione-staff]
+verify_jwt = true

@@ -7,6 +7,8 @@ export interface ClaimsApp {
   aal: 'aal1' | 'aal2';
   app_ruolo: RuoloApp;
   app_studio_id?: UUID;
+  /** Amministratore dello studio (gestisce staff e sostituzioni). */
+  app_admin: boolean;
 }
 
 const RUOLI: readonly RuoloApp[] = ['pediatra', 'segreteria', 'sostituto', 'tutore', 'nessuno'];
@@ -34,6 +36,7 @@ export function leggiClaims(accessToken: string): ClaimsApp | null {
       aal: dati.aal === 'aal2' ? 'aal2' : 'aal1',
       app_ruolo: ruolo,
       app_studio_id: typeof dati.app_studio_id === 'string' ? dati.app_studio_id : undefined,
+      app_admin: dati.app_admin === true && ruolo === 'pediatra',
     };
   } catch {
     return null;

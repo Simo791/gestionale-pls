@@ -10,15 +10,18 @@ export type Sezione = 'cruscotto' | 'agenda' | 'assistiti' | 'consensi' | 'regis
 export interface Rotta {
   sezione: Sezione;
   id?: string;
+  /** Azione da eseguire all'apertura (es. 'visita' = apri subito la visita odierna). */
+  azione?: string;
 }
 
 const SEZIONI: readonly Sezione[] = ['cruscotto', 'agenda', 'assistiti', 'consensi', 'registro', 'patologie', 'account'];
 
 function leggi(): Rotta {
-  const [sezione, id] = window.location.hash.replace(/^#\/?/, '').split('/');
+  const [sezione, id, azione] = window.location.hash.replace(/^#\/?/, '').split('/');
   return {
     sezione: SEZIONI.includes(sezione as Sezione) ? (sezione as Sezione) : 'cruscotto',
     id: id || undefined,
+    azione: azione || undefined,
   };
 }
 
@@ -35,4 +38,5 @@ export function useRotta(): Rotta {
   return rotta;
 }
 
-export const link = (sezione: Sezione, id?: string) => `#/${sezione}${id ? `/${id}` : ''}`;
+export const link = (sezione: Sezione, id?: string, azione?: string) =>
+  `#/${sezione}${id ? `/${id}` : ''}${id && azione ? `/${azione}` : ''}`;

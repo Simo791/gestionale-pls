@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { etichettaRuolo } from '../lib/formato';
 import { link, type Rotta, type Sezione } from '../lib/rotta';
 import { esci } from '../lib/sessione';
+import { Campanella } from './Notifiche';
 
 interface Voce {
   sezione: Sezione;
@@ -82,6 +83,8 @@ export default function Layout({
       {/* Barra superiore (smartphone) */}
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden">
         <span className="font-semibold text-teal-800">{nomeStudio}</span>
+        <div className="flex items-center gap-1">
+        <Campanella lato="destra" />
         <button
           onClick={() => setMenuAperto((a) => !a)}
           aria-expanded={menuAperto}
@@ -90,6 +93,7 @@ export default function Layout({
         >
           <Icona d={menuAperto ? 'M6 6l12 12M18 6L6 18' : 'M4 7h16M4 12h16M4 17h16'} />
         </button>
+        </div>
       </header>
 
       {menuAperto && (
@@ -103,9 +107,12 @@ export default function Layout({
 
       {/* Menu laterale (desktop) */}
       <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-slate-200 bg-white md:flex">
-        <div className="border-b border-slate-100 px-5 py-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-teal-700">Gestionale PLS</p>
-          <p className="font-semibold text-slate-900">{nomeStudio}</p>
+        <div className="flex items-start justify-between gap-2 border-b border-slate-100 px-5 py-4">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-teal-700">Gestionale PLS</p>
+            <p className="font-semibold text-slate-900">{nomeStudio}</p>
+          </div>
+          <Campanella />
         </div>
         {menu}
         {utente}

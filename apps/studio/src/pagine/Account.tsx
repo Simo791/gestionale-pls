@@ -1,5 +1,7 @@
 import type { ClaimsApp, Pediatra, Studio } from '@pls/shared';
 import { useEffect, useState, type FormEvent } from 'react';
+import GestioneStaff from '../componenti/GestioneStaff';
+import ImportaCatalogo from '../componenti/ImportaCatalogo';
 import { Bottone, Caricamento, Errore, Pannello } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
 import { etichettaRuolo } from '../lib/formato';
@@ -170,6 +172,16 @@ export default function Account({ claims }: { claims: ClaimsApp }) {
           )}
         </form>
       </Pannello>
+
+      <GestioneStaff claims={claims} />
+
+      {modificabile && (
+        <div id="catalogo-prestazioni">
+          <Pannello titolo="Catalogo prestazioni (Regione Calabria)" sottotitolo="Codici per le prescrizioni, importati dal file ufficiale">
+            <ImportaCatalogo />
+          </Pannello>
+        </div>
+      )}
     </div>
   );
 }

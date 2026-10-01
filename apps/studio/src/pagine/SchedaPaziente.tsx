@@ -17,20 +17,23 @@ import {
   type FinalitaConsenso,
   type Misurazione,
   type Paziente,
+  type Prescrizione,
   type Patologia,
   type PatologiaPaziente,
   type TipoRelazione,
   type Vaccinazione,
   type Visita,
 } from '@pls/shared';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Allergie from '../componenti/Allergie';
 import PatologieBambino from '../componenti/PatologieBambino';
+import Prescrizioni from '../componenti/Prescrizioni';
+import VisitaOdierna, { parametriVitali } from '../componenti/VisitaOdierna';
 import ControlliScreening from '../componenti/ControlliScreening';
 import LibrettoVaccinale, { righeLibretto } from '../componenti/LibrettoVaccinale';
 import { useStampa, type DatiBambino } from '../componenti/Stampa';
 import { useIntestazione } from '../lib/intestazione';
-import { docAllergie, docAnagrafica, docPatologie, docCrescita, docScreening, docVaccini, docVisite, type BaseDocumento } from './esportazioni';
+import { docAllergie, docAnagrafica, docPatologie, docPrescrizione, docVisita, docCrescita, docScreening, docVaccini, docVisite, type BaseDocumento } from './esportazioni';
 import GraficoCrescita from '../componenti/GraficoCrescita';
 import { Badge, Bottone, Caricamento, Errore, Pannello, Vuoto } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
@@ -71,12 +74,14 @@ const VERSIONE_INFORMATIVA = '2026-10';
 const ana = () => supabase.schema('anagrafica');
 
 /** Scheda del bambino: anagrafica, genitori e consensi, appuntamenti e (solo pediatra) cartella clinica. */
-export default function SchedaPaziente({ id, claims }: { id: string; claims: ClaimsApp }) {
+export default function SchedaPaziente({ id, claims, azione }: { id: string; claims: ClaimsApp; azione?: string }) {
   const puoVedereClinica = claims.app_ruolo === 'pediatra' || claims.app_ruolo === 'sostituto';
   const [cf, setCf] = useState<string | null>(null);
   const [clinica, setClinica] = useState<DatiClinici | null>(null);
   const [erroreAzione, setErroreAzione] = useState<string | null>(null);
   const [apertura, setApertura] = useState(false);
+  const [visitaAperta, setVisitaAperta] = useState(azione === 'visita');
+  const [ultimaSalvata, setUltimaSalvata] = useState<{ visita: Visita; misura: Misurazione | null } | null>(null);
   const { stampa, portale } = useStampa();
 
   const paziente = useDati(
@@ -111,6 +116,17 @@ export default function SchedaPaziente({ id, claims }: { id: string; claims: Cla
     setApertura(true);
     try {
       const pseudo = await q<string>(supabase.schema('api').rpc('apri_cartella', { p_paziente_id: id }));
+      await caricaClinica(pseudo);
+    } catch (e) {
+      setErroreAzione(e instanceof Error ? e.message : String(e));
+    } finally {
+      setApertura(false);
+    }
+  }
+
+  /** Legge i dati clinici dello pseudonimo già ottenuto (senza registrare una nuova apertura). */
+  async function caricaClinica(pseudo: string) {
+    {
       const cli = supabase.schema('clinica');
       const [cartella, misure, vaccini, visite] = await Promise.all([
         q<CartellaClinica | null>(cli.from('cartelle').select('*').eq('pseudo_id', pseudo).maybeSingle()),
@@ -119,11 +135,29 @@ export default function SchedaPaziente({ id, claims }: { id: string; claims: Cla
         q<Visita[]>(cli.from('visite').select('*').eq('pseudo_id', pseudo).order('data', { ascending: false }).limit(10)),
       ]);
       setClinica({ pseudo, cartella, misure, vaccini, visite });
-    } catch (e) {
-      setErroreAzione(e instanceof Error ? e.message : String(e));
-    } finally {
-      setApertura(false);
     }
+  }
+
+  // Arrivo da "Urgenza / senza appuntamento": apre subito cartella e visita odierna.
+  useEffect(() => {
+    if (azione === 'visita' && puoVedereClinica) void apriCartella();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const esenzioni = useDati(async () => {
+    if (!clinica) return [];
+    const righe = await q<{ patologia: string }[]>(supabase.schema('clinica').from('patologie_paziente')
+      .select('patologia').eq('pseudo_id', clinica.pseudo).eq('stato', 'confermata'));
+    if (righe.length === 0) return [];
+    const cat = await q<{ codice: string; nome: string; esenzione: string | null }[]>(
+      ana().from('catalogo_patologie').select('codice, nome, esenzione').in('codice', righe.map((r) => r.patologia)));
+    return cat.filter((c) => c.esenzione).map((c) => ({ codice: c.esenzione!, nome: c.nome }));
+  }, [clinica?.pseudo]);
+
+  async function stampaClinico(costruisci: (b: BaseDocumento) => ReturnType<typeof docVisita>) {
+    setErroreAzione(null);
+    const base = await baseDocumento();
+    if (base) stampa(costruisci(base));
   }
 
   async function registraConsenso(tutoreId: string, finalita: FinalitaConsenso) {
@@ -368,13 +402,52 @@ export default function SchedaPaziente({ id, claims }: { id: string; claims: Cla
           </Bottone>
         </Pannello>
       ) : (
-        <CartellaAperta dati={clinica} paziente={p} onVacciniCambiati={() => void ricaricaVaccini()} />
+        <>
+          <Pannello titolo="Visita odierna" sottotitolo={`${fmtGiornoIso(oggiIso())} · ultima visita, promemoria per i genitori, misure e parametri`}
+                    azione={!visitaAperta && <Bottone variante="primario" onClick={() => { setVisitaAperta(true); setUltimaSalvata(null); }}>Inizia visita</Bottone>}>
+            {visitaAperta ? (
+              <VisitaOdierna
+                pseudo={clinica.pseudo} paziente={p} cartella={clinica.cartella} misure={clinica.misure}
+                vaccini={clinica.vaccini} visite={clinica.visite}
+                onChiudi={() => setVisitaAperta(false)}
+                onSalvata={(visita, misura) => { setUltimaSalvata({ visita, misura }); setVisitaAperta(false); void caricaClinica(clinica.pseudo); }}
+              />
+            ) : ultimaSalvata ? (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-emerald-800">Visita salvata{ultimaSalvata.misura ? ' con le misure' : ''}.</span>
+                <Bottone onClick={() => void stampaClinico((b) => docVisita(b, ultimaSalvata.visita, ultimaSalvata.misura, p.sesso))}>Referto PDF</Bottone>
+                <a href="#prescrizioni" className="text-teal-700 underline">Prescrivi esami o visite</a>
+                {ultimaSalvata.visita.prossimo_controllo && <a href={link('agenda')} className="text-teal-700 underline">Fissa il controllo del {fmtGiornoIso(ultimaSalvata.visita.prossimo_controllo)} in agenda</a>}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600">
+                {clinica.visite[0] ? `Ultima visita il ${fmtData(clinica.visite[0].data)}: ${clinica.visite[0].motivo}.` : 'Nessuna visita registrata.'}
+              </p>
+            )}
+          </Pannello>
+
+          <div id="prescrizioni">
+            <Pannello titolo="Prescrizioni" sottotitolo="Visite ed esami dal catalogo regionale · promemoria per la ricetta elettronica">
+              <Prescrizioni
+                key={ultimaSalvata?.visita.id ?? 'nessuna'}
+                claims={claims} pseudoId={clinica.pseudo} visitaId={ultimaSalvata?.visita.id}
+                esenzioni={esenzioni.dati ?? []}
+                onStampa={(pr: Prescrizione) => void stampaClinico((b) => docPrescrizione(b, pr))}
+              />
+            </Pannello>
+          </div>
+
+          <CartellaAperta dati={clinica} paziente={p} onVacciniCambiati={() => void ricaricaVaccini()}
+                          onReferto={(v) => void stampaClinico((b) => docVisita(b, v, clinica.misure.find((m) => m.visita_id === v.id) ?? null, p.sesso))} />
+        </>
       )}
     </div>
   );
 }
 
-function CartellaAperta({ dati, paziente, onVacciniCambiati }: { dati: DatiClinici; paziente: Paziente; onVacciniCambiati: () => void }) {
+function CartellaAperta({ dati, paziente, onVacciniCambiati, onReferto }: {
+  dati: DatiClinici; paziente: Paziente; onVacciniCambiati: () => void; onReferto: (v: Visita) => void;
+}) {
   const { pseudo, cartella, misure, vaccini, visite } = dati;
   return (
     <div className="space-y-6">
@@ -463,12 +536,16 @@ function CartellaAperta({ dati, paziente, onVacciniCambiati }: { dati: DatiClini
         {visite.length === 0 ? <Vuoto testo="Nessuna visita registrata." /> : (
           <ul className="divide-y divide-slate-100">
             {visite.map((v) => (
-              <li key={v.id} className="py-2 text-sm">
-                <p className="font-medium text-slate-900">
-                  {fmtData(v.data)} · {v.motivo}
-                </p>
-                {v.esame_obiettivo && <p className="text-slate-600">{v.esame_obiettivo}</p>}
-                {v.terapia && <p className="text-slate-600">Terapia: {v.terapia}</p>}
+              <li key={v.id} className="flex flex-wrap items-start justify-between gap-2 py-2 text-sm">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-slate-900">{fmtData(v.data)} · {v.motivo}</p>
+                  {parametriVitali(v) && <p className="text-xs text-slate-500">{parametriVitali(v)}</p>}
+                  {v.esame_obiettivo && <p className="text-slate-600">{v.esame_obiettivo}</p>}
+                  {v.diagnosi_icd9cm.length > 0 && <p className="text-slate-600">Diagnosi: {v.diagnosi_icd9cm.join(', ')}</p>}
+                  {v.terapia && <p className="text-slate-600">Terapia: {v.terapia}</p>}
+                  {v.indicazioni_genitori && <p className="whitespace-pre-line text-slate-600">Indicazioni: {v.indicazioni_genitori}</p>}
+                </div>
+                <Bottone onClick={() => onReferto(v)}>Referto PDF</Bottone>
               </li>
             ))}
           </ul>

@@ -1,6 +1,8 @@
-import type { ClaimsApp, Patologia } from '@pls/shared';
+import type { ClaimsApp, Patologia, VoceStorico } from '@pls/shared';
 import { useState } from 'react';
+import ModificaPatologia, { ETICHETTE_CATALOGO } from '../componenti/ModificaPatologia';
 import SchedaPatologia, { AREE, AVVERTENZA, FONTI_GENERALI } from '../componenti/SchedaPatologia';
+import Storico from '../componenti/Storico';
 import { DocumentoStampa, useStampa } from '../componenti/Stampa';
 import { Badge, Bottone, Caricamento, Errore, Pannello, Vuoto } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
@@ -22,6 +24,14 @@ export default function Patologie({ claims, codice }: { claims: ClaimsApp; codic
   const [area, setArea] = useState('');
   const { stampa, portale } = useStampa();
   const intestazione = useIntestazione(claims.app_ruolo === 'pediatra' ? claims.sub : null);
+  const [modifica, setModifica] = useState(false);
+  const storico = useDati(
+    async () => (codice
+      ? q<(VoceStorico & { autore_nome: string | null; motivo: string | null })[]>(supabase.schema('anagrafica')
+          .from('catalogo_patologie_storico').select('*').eq('codice', codice).order('avvenuto_il', { ascending: false }))
+      : []),
+    [codice],
+  );
 
   const catalogo = useDati(
     () => q<Patologia[]>(supabase.schema('anagrafica').from('catalogo_patologie').select('*').order('nome')),
@@ -48,8 +58,15 @@ export default function Patologie({ claims, codice }: { claims: ClaimsApp; codic
             </DocumentoStampa>,
           )}>Esporta PDF</Bottone>
         </div>
-        <Pannello titolo="Scheda della patologia">
-          <SchedaPatologia p={scelta} />
+        <Pannello titolo="Scheda della patologia"
+                  azione={claims.app_admin && !modifica && <Bottone onClick={() => setModifica(true)}>Modifica scheda</Bottone>}>
+          {modifica
+            ? <ModificaPatologia p={scelta} onFatto={(salvata) => { setModifica(false); if (salvata) { catalogo.ricarica(); storico.ricarica(); } }} />
+            : <SchedaPatologia p={scelta} />}
+        </Pannello>
+        <Pannello titolo="Storico modifiche" sottotitolo="Chi ha cambiato cosa, quando e perché (valori prima → dopo)">
+          <Storico voci={storico.dati ?? []} etichette={ETICHETTE_CATALOGO} />
+          <p className="mt-2 text-xs text-slate-500">Contenuto iniziale da fonti ufficiali (vedi Fonti). Le modifiche sono riservate all'amministratore dello studio.</p>
         </Pannello>
       </div>
     );

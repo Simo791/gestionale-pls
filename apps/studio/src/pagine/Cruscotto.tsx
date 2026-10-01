@@ -8,7 +8,11 @@ import type {
   EventoAttivita,
   Paziente,
 } from '@pls/shared';
-import { Badge, Caricamento, Errore, Kpi, Pannello, Vuoto } from '../componenti/ui';
+import { useState } from 'react';
+import AccessoRapido from '../componenti/AccessoRapido';
+import { NotificheNonLette } from '../componenti/Notifiche';
+import TurnoSostituzione from '../componenti/TurnoSostituzione';
+import { Badge, Bottone, Caricamento, Errore, Kpi, Pannello, Vuoto } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
 import {
   ETICHETTA_FINALITA,
@@ -40,6 +44,7 @@ function confiniOggi() {
 
 export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
   const isPediatra = claims.app_ruolo === 'pediatra';
+  const [accessoRapido, setAccessoRapido] = useState(false);
 
   const oggi = useDati(async () => {
     const { inizio, fine } = confiniOggi();
@@ -84,14 +89,22 @@ export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
           <h1 className="text-2xl font-semibold text-slate-900">Cruscotto</h1>
           <p className="text-sm capitalize text-slate-500">{fmtGiornoLungo(new Date())}</p>
         </div>
-        {isPediatra && integro !== null && (
-          <a href={link('registro')}>
-            <Badge tono={integro ? 'ok' : 'errore'}>
-              {integro ? `Registro di audit integro · ${audit.dati?.eventi_verificati} eventi` : 'Registro di audit ALTERATO'}
-            </Badge>
-          </a>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {isPediatra && integro !== null && (
+            <a href={link('registro')}>
+              <Badge tono={integro ? 'ok' : 'errore'}>
+                {integro ? `Registro di audit integro · ${audit.dati?.eventi_verificati} eventi` : 'Registro di audit ALTERATO'}
+              </Badge>
+            </a>
+          )}
+          <Bottone variante="primario" onClick={() => setAccessoRapido(true)}>+ Urgenza / senza appuntamento</Bottone>
+        </div>
       </div>
+
+      <TurnoSostituzione claims={claims} />
+      <NotificheNonLette />
+
+      {accessoRapido && <AccessoRapido claims={claims} onChiudi={() => setAccessoRapido(false)} />}
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi etichetta="Appuntamenti oggi" valore={oggi.dati?.length ?? '…'}

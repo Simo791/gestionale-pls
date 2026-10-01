@@ -49,7 +49,7 @@ function Applicazione({ claims }: { claims: ClaimsApp }) {
       pagina = <Agenda claims={claims} />;
       break;
     case 'assistiti':
-      pagina = rotta.id ? <SchedaPaziente key={rotta.id} id={rotta.id} claims={claims} /> : <Assistiti />;
+      pagina = rotta.id ? <SchedaPaziente key={rotta.id} id={rotta.id} claims={claims} azione={rotta.azione} /> : <Assistiti />;
       break;
     case 'consensi':
       pagina = <Consensi />;

@@ -131,7 +131,19 @@ export interface Visita {
   esame_obiettivo: string | null;
   diagnosi_icd9cm: string[];
   terapia: string | null;
+  tipo: TipoVisita;
+  anamnesi: string | null;
+  temperatura_c: number | null;
+  frequenza_cardiaca: number | null;
+  frequenza_respiratoria: number | null;
+  saturazione_o2: number | null;
+  pa_sistolica: number | null;
+  pa_diastolica: number | null;
+  indicazioni_genitori: string | null;
+  prossimo_controllo: ISODate | null;
 }
+
+export type TipoVisita = 'ambulatoriale' | 'urgenza' | 'bilancio_salute' | 'controllo' | 'domiciliare';
 
 export interface Misurazione {
   id: UUID;
@@ -306,4 +318,88 @@ export interface PatologiaPaziente {
   centro_riferimento: string | null;
   note: string | null;
   creato_il: string;
+}
+
+/** Prestazione del catalogo regionale importato dal file ufficiale. */
+export interface Prestazione {
+  id: UUID;
+  studio_id: UUID;
+  regione: string;
+  codice_regionale: string;
+  codice_nazionale: string | null;
+  descrizione: string;
+  branca: string | null;
+  nota_erogabilita: string | null;
+  attivo: boolean;
+  versione: string;
+  importato_il: ISODateTime;
+}
+
+export interface PrestazionePrescritta {
+  codice_regionale: string;
+  codice_nazionale: string | null;
+  descrizione: string;
+  branca: string | null;
+  quantita: number;
+}
+
+export type PrioritaPrescrizione = 'U' | 'B' | 'D' | 'P';
+
+/** Promemoria di prescrizione (da ricopiare nel software di ricetta elettronica). */
+export interface Prescrizione {
+  id: UUID;
+  pseudo_id: PseudoId;
+  visita_id: UUID | null;
+  pediatra_id: UUID;
+  data: ISODateTime;
+  accesso: 'primo' | 'successivo';
+  priorita: PrioritaPrescrizione | null;
+  quesito: string;
+  esenzione: string | null;
+  prestazioni: PrestazionePrescritta[];
+  note: string | null;
+}
+
+export interface MembroStudio {
+  utente_id: UUID;
+  studio_id: UUID;
+  ruolo: 'pediatra' | 'segreteria' | 'sostituto';
+  attivo: boolean;
+  amministratore: boolean;
+  nome: string | null;
+  cognome: string | null;
+  email: string | null;
+  creato_il: ISODateTime;
+}
+
+export interface Sostituzione {
+  id: UUID;
+  studio_id: UUID;
+  titolare_id: UUID;
+  sostituto_id: UUID;
+  dal: ISODate;
+  al: ISODate;
+  consegne: string | null;
+  creato_il: ISODateTime;
+  revocata_il: ISODateTime | null;
+}
+
+export interface Notifica {
+  id: UUID;
+  tipo: string;
+  titolo: string;
+  testo: string | null;
+  link: string | null;
+  creato_il: ISODateTime;
+  letta_il: ISODateTime | null;
+}
+
+export interface VoceStorico {
+  id: number;
+  operazione: 'INSERT' | 'UPDATE';
+  campi: string[];
+  prima: Record<string, unknown> | null;
+  dopo: Record<string, unknown>;
+  autore: UUID | null;
+  avvenuto_il: ISODateTime;
 }

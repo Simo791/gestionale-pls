@@ -1,4 +1,4 @@
-import type { FinalitaConsenso, StatoAppuntamento, StatoConsenso, TipoAppuntamento, TipoRelazione } from '@pls/shared';
+import type { FinalitaConsenso, PrioritaPrescrizione, StatoAppuntamento, StatoConsenso, TipoAppuntamento, TipoRelazione, TipoVisita } from '@pls/shared';
 import type { Tono } from '../componenti/ui';
 
 const FUSO = 'Europe/Rome';
@@ -71,6 +71,7 @@ const AZIONI: Record<string, string> = {
   APERTURA_CARTELLA: 'Apertura cartella',
   LETTURA_CODICE_FISCALE: 'Lettura codice fiscale',
   COLLEGAMENTO_TUTORE: 'Collegamento account genitore',
+  IMPORTA_CATALOGO_PRESTAZIONI: 'Importazione catalogo prestazioni',
 };
 export const etichettaAzione = (a: string) => AZIONI[a] ?? a;
 
@@ -84,6 +85,29 @@ const TABELLE: Record<string, string> = {
   'clinica.visite': 'Visita',
   'clinica.misurazioni': 'Misurazione',
   'clinica.vaccinazioni': 'Vaccinazione',
+  'clinica.allergie': 'Allergia',
+  'clinica.controlli_eseguiti': 'Controllo / screening',
+  'clinica.patologie_paziente': 'Patologia',
+  'clinica.prescrizioni': 'Prescrizione',
+  'anagrafica.pediatri': 'Profilo del medico',
+  'anagrafica.studi': 'Dati dello studio',
+  'anagrafica.catalogo_prestazioni': 'Catalogo prestazioni',
+};
+
+export const ETICHETTA_TIPO_VISITA: Record<TipoVisita, string> = {
+  ambulatoriale: 'Visita ambulatoriale',
+  urgenza: 'Urgenza',
+  bilancio_salute: 'Bilancio di salute',
+  controllo: 'Controllo',
+  domiciliare: 'Visita domiciliare',
+};
+
+/** Classi di priorità della ricetta (Piano nazionale di governo delle liste d'attesa 2019-2021). */
+export const PRIORITA: Record<PrioritaPrescrizione, string> = {
+  U: 'U · Urgente, entro 72 ore',
+  B: 'B · Breve, entro 10 giorni',
+  D: 'D · Differibile, entro 30 giorni (visite) o 60 giorni (accertamenti)',
+  P: 'P · Programmata, entro 120 giorni',
 };
 export const etichettaTabella = (t: string | null) => (t ? (TABELLE[t] ?? t) : '—');
 

@@ -10,7 +10,7 @@ describe('leggiClaims', () => {
     const c = leggiClaims(
       token({ sub: 'u1', aal: 'aal2', app_ruolo: 'pediatra', app_studio_id: 's1', email: 'a@b.it' }),
     );
-    expect(c).toEqual({ sub: 'u1', email: 'a@b.it', aal: 'aal2', app_ruolo: 'pediatra', app_studio_id: 's1' });
+    expect(c).toEqual({ sub: 'u1', email: 'a@b.it', aal: 'aal2', app_ruolo: 'pediatra', app_studio_id: 's1', app_admin: false });
   });
 
   it('tratta un ruolo sconosciuto come "nessuno"', () => {
@@ -27,5 +27,9 @@ describe('richiedeMfa', () => {
     expect(richiedeMfa('pediatra')).toBe(true);
     expect(richiedeMfa('segreteria')).toBe(true);
     expect(richiedeMfa('tutore')).toBe(false);
+  });
+  it('app_admin vale solo per il pediatra', () => {
+    expect(leggiClaims(token({ sub: 'u1', app_ruolo: 'pediatra', app_admin: true }))?.app_admin).toBe(true);
+    expect(leggiClaims(token({ sub: 'u1', app_ruolo: 'segreteria', app_admin: true }))?.app_admin).toBe(false);
   });
 });

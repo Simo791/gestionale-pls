@@ -11,6 +11,7 @@ import {
   type ControlloEseguito,
   type Misurazione,
   type Paziente,
+  type Prescrizione,
   type Patologia,
   type PatologiaPaziente,
   type Pediatra,
@@ -22,12 +23,16 @@ import { CATEGORIE, FONTI_ALLERGIE, GRAVITA, STATI } from '../componenti/Allergi
 import GraficoCrescita from '../componenti/GraficoCrescita';
 import { STATI_PATOLOGIA } from '../componenti/PatologieBambino';
 import { AVVERTENZA } from '../componenti/SchedaPatologia';
+import { REGOLE_RICETTA } from '../componenti/Prescrizioni';
+import { parametriVitali } from '../componenti/VisitaOdierna';
 import { FONTE_CALENDARIO, type RigaLibretto } from '../componenti/LibrettoVaccinale';
 import { DocumentoStampa, TabellaStampa, type DatiBambino } from '../componenti/Stampa';
 import {
   ETICHETTA_FINALITA,
   ETICHETTA_RELAZIONE,
   ETICHETTA_TIPO,
+  ETICHETTA_TIPO_VISITA,
+  PRIORITA,
   STATO_APPUNTAMENTO,
   STATO_CONSENSO,
   fmtData,
@@ -230,6 +235,68 @@ export function docPatologie(base: BaseDocumento, righe: PatologiaPaziente[], ca
         />
       )}
       <Nota>{`Codici di esenzione: DPCM 12/1/2017, Allegato 7 (malattie rare) e Allegato 8 (malattie croniche). ${AVVERTENZA}`}</Nota>
+    </DocumentoStampa>
+  );
+}
+
+/** Referto della visita, con le indicazioni per i genitori. */
+export function docVisita(base: BaseDocumento, v: Visita, m: Misurazione | null, sesso: Paziente['sesso']) {
+  const perc = (ind: 'peso' | 'altezza' | 'circonferenza_cranica', x: number | null) =>
+    m && x !== null ? `${x} (percentile OMS ${fmtPercentile(percentileMisura(ind, sesso, m.eta_giorni, x))})` : null;
+  const righe: [string, string | null][] = [
+    ['Data', fmtDataOra(v.data)],
+    ['Tipo', ETICHETTA_TIPO_VISITA[v.tipo] ?? v.tipo],
+    ['Motivo', v.motivo],
+    ['Anamnesi', v.anamnesi],
+    ['Peso (kg)', m ? perc('peso', m.peso_kg) : null],
+    ['Lunghezza/altezza (cm)', m ? perc('altezza', m.altezza_cm) : null],
+    ['Circonferenza cranica (cm)', m ? perc('circonferenza_cranica', m.circonferenza_cranica_cm) : null],
+    ['Parametri vitali', parametriVitali(v) || null],
+    ['Esame obiettivo', v.esame_obiettivo],
+    ['Diagnosi (ICD-9-CM)', v.diagnosi_icd9cm.join(', ') || null],
+    ['Terapia', v.terapia],
+    ['Prossimo controllo', v.prossimo_controllo ? fmtGiornoIso(v.prossimo_controllo) : null],
+  ];
+  return (
+    <DocumentoStampa titolo="Referto di visita pediatrica" {...base}>
+      <table className="mb-4 w-full border-collapse text-[10pt]">
+        <tbody>
+          {righe.filter(([, x]) => x).map(([t, x]) => (
+            <tr key={t} style={{ breakInside: 'avoid' }}>
+              <th className="w-48 border border-black bg-gray-100 px-2 py-1 text-left align-top">{t}</th>
+              <td className="whitespace-pre-line border border-black px-2 py-1">{x}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {v.indicazioni_genitori && (
+        <div style={{ breakInside: 'avoid' }}>
+          <h2 className="mb-1 font-bold">Indicazioni per i genitori</h2>
+          <p className="whitespace-pre-line">{v.indicazioni_genitori}</p>
+        </div>
+      )}
+    </DocumentoStampa>
+  );
+}
+
+/** Promemoria di prescrizione: da ricopiare nel software di ricetta elettronica. */
+export function docPrescrizione(base: BaseDocumento, p: Prescrizione) {
+  return (
+    <DocumentoStampa titolo="Promemoria di prescrizione" {...base}>
+      <p className="mb-3 border-2 border-black p-2 text-center font-bold">
+        PROMEMORIA INTERNO — NON VALIDO COME RICETTA. La prescrizione va emessa con la ricetta elettronica del Servizio sanitario.
+      </p>
+      <TabellaStampa
+        intestazioni={['Codice regionale', 'Codice nomenclatore', 'Prestazione', 'Branca', 'Q.tà']}
+        righe={p.prestazioni.map((x) => [x.codice_regionale, x.codice_nazionale, x.descrizione, x.branca, x.quantita])}
+      />
+      <TabellaStampa
+        intestazioni={['Accesso', 'Priorità', 'Quesito diagnostico', 'Esenzione', 'Data']}
+        righe={[[p.accesso === 'primo' ? 'Primo accesso' : 'Accesso successivo', p.priorita ? PRIORITA[p.priorita] : null,
+                 p.quesito, p.esenzione, fmtData(p.data)]]}
+      />
+      {p.note && <p>Note: {p.note}</p>}
+      <Nota>{REGOLE_RICETTA.join(' ')}</Nota>
     </DocumentoStampa>
   );
 }

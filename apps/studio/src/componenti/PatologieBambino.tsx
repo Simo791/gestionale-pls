@@ -1,9 +1,10 @@
-import type { Patologia, PatologiaPaziente } from '@pls/shared';
+import type { MembroStudio, Patologia, PatologiaPaziente, VoceStorico } from '@pls/shared';
 import { useState, type FormEvent } from 'react';
 import { q, useDati } from '../lib/dati';
 import { fmtGiornoIso, oggiIso } from '../lib/formato';
 import { link } from '../lib/rotta';
 import { supabase } from '../lib/supabase';
+import Storico from './Storico';
 import { Badge, Bottone, Caricamento, Errore, Vuoto, type Tono } from './ui';
 
 export const STATI_PATOLOGIA: Record<PatologiaPaziente['stato'], { testo: string; tono: Tono }> = {
@@ -12,6 +13,45 @@ export const STATI_PATOLOGIA: Record<PatologiaPaziente['stato'], { testo: string
   esclusa: { testo: 'Esclusa', tono: 'neutro' },
 };
 
+const ETICHETTE_CAMPI: Record<string, string> = {
+  stato: 'Stato', data_diagnosi: 'Data diagnosi', esenzione_attiva: 'Esenzione attiva',
+  centro_riferimento: 'Centro di riferimento', note: 'Note', patologia: 'Patologia',
+};
+
+/** Riga in modifica: tutti i campi clinici, salvati in un'unica modifica tracciata. */
+function ModificaRiga({ r, conEsenzione, onFatto }: { r: PatologiaPaziente; conEsenzione: boolean; onFatto: (errore?: string) => void }) {
+  const [m, setM] = useState({ stato: r.stato, data: r.data_diagnosi ?? '', esenzione: r.esenzione_attiva, centro: r.centro_riferimento ?? '', note: r.note ?? '' });
+  async function salva(e: FormEvent) {
+    e.preventDefault();
+    const { error } = await supabase.schema('clinica').from('patologie_paziente').update({
+      stato: m.stato, data_diagnosi: m.data || null, esenzione_attiva: m.esenzione,
+      centro_riferimento: m.centro.trim() || null, note: m.note.trim() || null,
+    }).eq('id', r.id);
+    onFatto(error?.message);
+  }
+  const stile = 'w-full rounded-lg border border-slate-300 px-2 py-1';
+  return (
+    <form onSubmit={(e) => void salva(e)} className="mt-2 grid w-full gap-2 rounded-lg bg-slate-50 p-2 text-sm md:grid-cols-2">
+      <label><span className="block text-xs text-slate-500">Stato</span>
+        <select value={m.stato} onChange={(e) => setM({ ...m, stato: e.target.value as PatologiaPaziente['stato'] })} className={stile}>
+          {(Object.keys(STATI_PATOLOGIA) as PatologiaPaziente['stato'][]).map((s) => <option key={s} value={s}>{STATI_PATOLOGIA[s].testo}</option>)}
+        </select></label>
+      <label><span className="block text-xs text-slate-500">Data della diagnosi</span>
+        <input type="date" max={oggiIso()} value={m.data} onChange={(e) => setM({ ...m, data: e.target.value })} className={stile} /></label>
+      <label><span className="block text-xs text-slate-500">Centro di riferimento</span>
+        <input value={m.centro} onChange={(e) => setM({ ...m, centro: e.target.value })} className={stile} /></label>
+      <label className="flex items-end gap-2 pb-1 text-xs text-slate-700">
+        <input type="checkbox" disabled={!conEsenzione} checked={m.esenzione} onChange={(e) => setM({ ...m, esenzione: e.target.checked })} /> Esenzione attiva</label>
+      <label className="md:col-span-2"><span className="block text-xs text-slate-500">Note</span>
+        <input value={m.note} onChange={(e) => setM({ ...m, note: e.target.value })} className={stile} /></label>
+      <div className="flex gap-2 md:col-span-2">
+        <Bottone type="submit" variante="primario">Salva modifiche</Bottone>
+        <Bottone onClick={() => onFatto()}>Annulla</Bottone>
+      </div>
+    </form>
+  );
+}
+
 /** Patologie del bambino collegate al catalogo, con stato, esenzione e centro di riferimento. */
 export default function PatologieBambino({ pseudoId }: { pseudoId: string }) {
   const [aperto, setAperto] = useState(false);
@@ -19,6 +59,19 @@ export default function PatologieBambino({ pseudoId }: { pseudoId: string }) {
     patologia: '', stato: 'sospetta' as PatologiaPaziente['stato'], data: '', esenzione: false, centro: '', note: '',
   });
   const [errore, setErrore] = useState<string | null>(null);
+  const [inModifica, setInModifica] = useState<string | null>(null);
+  const [conStorico, setConStorico] = useState<string | null>(null);
+
+  const storico = useDati(
+    async () => (conStorico
+      ? q<VoceStorico[]>(supabase.schema('clinica').from('patologie_storico').select('*').eq('riga_id', conStorico).order('avvenuto_il', { ascending: false }))
+      : []),
+    [conStorico],
+  );
+  const autori = useDati(async () => new Map(
+    (await q<MembroStudio[]>(supabase.schema('anagrafica').from('membri_studio').select('utente_id, nome, cognome, email')))
+      .map((m) => [m.utente_id, `${m.nome ?? ''} ${m.cognome ?? ''}`.trim() || m.email || 'utente'] as [string, string]),
+  ), []);
 
   const catalogo = useDati(() => q<Patologia[]>(supabase.schema('anagrafica').from('catalogo_patologie').select('*').order('nome')), []);
   const elenco = useDati(
@@ -48,13 +101,6 @@ export default function PatologieBambino({ pseudoId }: { pseudoId: string }) {
     elenco.ricarica();
   }
 
-  async function aggiorna(id: string, campi: Partial<Pick<PatologiaPaziente, 'stato' | 'esenzione_attiva'>>) {
-    setErrore(null);
-    const { error } = await supabase.schema('clinica').from('patologie_paziente').update(campi).eq('id', id);
-    if (error) setErrore(error.message);
-    else elenco.ricarica();
-  }
-
   if (catalogo.errore || elenco.errore) return <Errore messaggio={catalogo.errore ?? elenco.errore ?? ''} />;
   if (catalogo.caricamento || elenco.caricamento) return <Caricamento />;
 
@@ -80,17 +126,20 @@ export default function PatologieBambino({ pseudoId }: { pseudoId: string }) {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tono={STATI_PATOLOGIA[r.stato].tono}>{STATI_PATOLOGIA[r.stato].testo}</Badge>
-                  <select value={r.stato} onChange={(e) => void aggiorna(r.id, { stato: e.target.value as PatologiaPaziente['stato'] })}
-                          aria-label="Stato della patologia" className="rounded-lg border border-slate-300 px-2 py-1 text-xs">
-                    {(Object.keys(STATI_PATOLOGIA) as PatologiaPaziente['stato'][]).map((s) => <option key={s} value={s}>{STATI_PATOLOGIA[s].testo}</option>)}
-                  </select>
-                  {p?.esenzione && (
-                    <label className="flex items-center gap-1 text-xs text-slate-600">
-                      <input type="checkbox" checked={r.esenzione_attiva} onChange={(e) => void aggiorna(r.id, { esenzione_attiva: e.target.checked })} />
-                      Esenzione attiva
-                    </label>
-                  )}
+                  <button className="text-xs text-teal-700 underline" onClick={() => setInModifica(inModifica === r.id ? null : r.id)}>Modifica</button>
+                  <button className="text-xs text-teal-700 underline" onClick={() => setConStorico(conStorico === r.id ? null : r.id)}>
+                    {conStorico === r.id ? 'Nascondi storico' : 'Storico modifiche'}
+                  </button>
                 </div>
+                {inModifica === r.id && (
+                  <ModificaRiga r={r} conEsenzione={!!p?.esenzione}
+                                onFatto={(err) => { if (err) setErrore(err); else { setInModifica(null); elenco.ricarica(); storico.ricarica(); } }} />
+                )}
+                {conStorico === r.id && (
+                  <div className="mt-2 w-full">
+                    <Storico voci={storico.dati ?? []} etichette={ETICHETTE_CAMPI} autori={autori.dati ?? undefined} />
+                  </div>
+                )}
               </li>
             );
           })}
@@ -147,7 +196,7 @@ export default function PatologieBambino({ pseudoId }: { pseudoId: string }) {
         </form>
       )}
       <p className="text-xs text-slate-500">
-        Il catalogo è di consultazione: lo stato della patologia lo stabilisce il medico. Per l'esenzione serve la certificazione di un presidio della rete malattie rare (malattie rare) o di una struttura specialistica del Servizio sanitario (patologie croniche), presentata alla ASL.
+        Il catalogo è di consultazione: lo stato della patologia lo stabilisce il medico. Le patologie non si cancellano: si segnano come escluse, e ogni modifica resta nello storico con autore, data e valori precedenti. Per l'esenzione serve la certificazione di un presidio della rete malattie rare (malattie rare) o di una struttura specialistica del Servizio sanitario (patologie croniche), presentata alla ASL.
       </p>
     </div>
   );

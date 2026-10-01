@@ -147,3 +147,13 @@ where m.pseudo_id = c.pseudo_id and m.paziente_id = 'd0000000-0000-4000-8000-000
 update anagrafica.pediatri set ordine_provincia = 'Catanzaro', ordine_numero = '00000',
   partita_iva = '00000000000', telefono = '0000 000000'
 where id = 'a0000000-0000-4000-8000-000000000001';
+
+-- Blocco 5: amministratore dello studio e nomi dello staff
+update anagrafica.membri_studio set amministratore = true where utente_id = 'a0000000-0000-4000-8000-000000000001';
+update anagrafica.membri_studio set amministratore = true where utente_id = 'a0000000-0000-4000-8000-000000000003';
+update anagrafica.membri_studio set nome = 'Giulia', cognome = 'Verdi', email = 'segreteria@example.com'
+ where utente_id = 'a0000000-0000-4000-8000-000000000002';
+update anagrafica.membri_studio set nome = 'Marco', cognome = 'Gialli', email = 'sostituto@example.com'
+ where utente_id = 'a0000000-0000-4000-8000-000000000004';
+update anagrafica.membri_studio m set nome = p.nome, cognome = p.cognome, email = p.email
+  from anagrafica.pediatri p where p.id = m.utente_id;
