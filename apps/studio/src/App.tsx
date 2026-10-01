@@ -1,10 +1,19 @@
-import { isStaff, richiedeMfa } from '@pls/shared';
+import { isStaff, richiedeMfa, type ClaimsApp } from '@pls/shared';
+import Layout from './componenti/Layout';
+import { q, useDati } from './lib/dati';
+import { useRotta } from './lib/rotta';
 import { esci, useSessione } from './lib/sessione';
+import { supabase } from './lib/supabase';
 import Accesso from './pagine/Accesso';
+import Agenda from './pagine/Agenda';
+import Assistiti from './pagine/Assistiti';
+import Consensi from './pagine/Consensi';
 import Cruscotto from './pagine/Cruscotto';
+import Registro from './pagine/Registro';
+import SchedaPaziente from './pagine/SchedaPaziente';
 import SecondoFattore from './pagine/SecondoFattore';
 
-/** Sequenza: login con codice email → secondo fattore TOTP → cruscotto. */
+/** Sequenza: login con codice email → secondo fattore TOTP → applicazione. */
 export default function App() {
   const { caricamento, sessione, claims } = useSessione();
 
@@ -22,5 +31,37 @@ export default function App() {
 
   if (richiedeMfa(claims.app_ruolo) && claims.aal !== 'aal2') return <SecondoFattore />;
 
-  return <Cruscotto claims={claims} />;
+  return <Applicazione claims={claims} />;
+}
+
+function Applicazione({ claims }: { claims: ClaimsApp }) {
+  const rotta = useRotta();
+  const studio = useDati(
+    () => q<{ nome: string }>(supabase.schema('anagrafica').from('studi').select('nome').single()),
+    [],
+  );
+
+  let pagina;
+  switch (rotta.sezione) {
+    case 'agenda':
+      pagina = <Agenda />;
+      break;
+    case 'assistiti':
+      pagina = rotta.id ? <SchedaPaziente key={rotta.id} id={rotta.id} claims={claims} /> : <Assistiti />;
+      break;
+    case 'consensi':
+      pagina = <Consensi />;
+      break;
+    case 'registro':
+      pagina = claims.app_ruolo === 'pediatra' ? <Registro /> : <Cruscotto claims={claims} />;
+      break;
+    default:
+      pagina = <Cruscotto claims={claims} />;
+  }
+
+  return (
+    <Layout claims={claims} rotta={rotta} nomeStudio={studio.dati?.nome ?? 'Studio'}>
+      {pagina}
+    </Layout>
+  );
 }

@@ -1,4 +1,4 @@
-import { schemaCodice, schemaEmail } from '@pls/shared';
+import { schemaCodiceEmail, schemaEmail } from '@pls/shared';
 import { useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
 
@@ -28,22 +28,27 @@ export default function Accesso({ titolo, creaNuoviUtenti }: Props) {
     });
     setInCorso(false);
     if (error?.status === 429) return setErrore('Troppi tentativi: riprova tra qualche minuto.');
-    if (error && !error.status) return setErrore('Connessione non riuscita. Riprova.');
-    // Per gli altri errori (es. email non registrata) passiamo comunque al codice:
+    // 400/422 = email non ammessa (es. non registrata): passiamo comunque al codice,
     // così non riveliamo quali email sono presenti nel sistema.
+    // Qualsiasi altro errore (chiave API errata, server, rete) va mostrato.
+    if (error && error.status !== 400 && error.status !== 422) {
+      return setErrore(`Invio non riuscito (${error.status ?? 'rete'}): ${error.message}`);
+    }
     setEmail(dati.data.email);
     setFase('codice');
   }
 
   async function verifica(e: FormEvent) {
     e.preventDefault();
-    const dati = schemaCodice.safeParse({ codice });
+    const dati = schemaCodiceEmail.safeParse({ codice });
     if (!dati.success) return setErrore(dati.error.issues[0]?.message ?? 'Codice non valido');
     setInCorso(true);
     setErrore(null);
     const { error } = await supabase.auth.verifyOtp({ email, token: dati.data.codice, type: 'email' });
     setInCorso(false);
-    if (error) setErrore('Codice errato o scaduto.');
+    if (error) {
+      setErrore(error.status === 403 || error.status === 400 ? 'Codice errato o scaduto.' : `Accesso non riuscito (${error.status ?? 'rete'}): ${error.message}`);
+    }
   }
 
   return (
@@ -73,14 +78,14 @@ export default function Accesso({ titolo, creaNuoviUtenti }: Props) {
         </form>
       ) : (
         <form onSubmit={verifica} className="space-y-3">
-          <label className="block text-sm font-medium" htmlFor="codice">Codice a 6 cifre</label>
+          <label className="block text-sm font-medium" htmlFor="codice">Codice ricevuto via email</label>
           <input
             id="codice"
             inputMode="numeric"
             autoComplete="one-time-code"
-            maxLength={6}
+            maxLength={10}
             value={codice}
-            onChange={(e) => setCodice(e.target.value)}
+            onChange={(e) => setCodice(e.target.value.replace(/\D/g, ''))}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-center text-xl tracking-widest"
             required
           />

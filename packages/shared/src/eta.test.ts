@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { etaInGiorni, etaLeggibile } from './eta';
+import { etaDaGiorni, etaInGiorni, etaLeggibile } from './eta';
 
 describe('etaInGiorni', () => {
   it('conta i giorni tra nascita e misurazione', () => {
@@ -27,5 +27,14 @@ describe('etaLeggibile', () => {
   it('usa anni e mesi dopo i due anni', () => {
     expect(etaLeggibile('2020-07-22', '2026-10-01')).toBe('6 anni e 2 mesi');
     expect(etaLeggibile('2023-10-01', '2026-10-01')).toBe('3 anni');
+  });
+});
+
+describe('etaDaGiorni', () => {
+  it('giorni, mesi e anni', () => {
+    expect(etaDaGiorni(30)).toBe('30 giorni');
+    expect(etaDaGiorni(183)).toBe('6 mesi');
+    expect(etaDaGiorni(731)).toBe('2 anni');
+    expect(etaDaGiorni(1300)).toBe('3 anni e 6 mesi');
   });
 });

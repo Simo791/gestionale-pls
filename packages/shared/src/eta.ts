@@ -34,3 +34,15 @@ export function etaLeggibile(dataNascita: ISODate, oggi: ISODate): string {
   if (resto === 0) return `${anni} anni`;
   return `${anni} anni e ${resto} ${resto === 1 ? 'mese' : 'mesi'}`;
 }
+
+/** Età leggibile a partire dai giorni di vita (usata per le misurazioni in cartella). */
+export function etaDaGiorni(giorni: number): string {
+  if (giorni < 0) throw new Error('Età negativa');
+  if (giorni < 60) return giorni === 1 ? '1 giorno' : `${giorni} giorni`;
+  const mesi = Math.floor(giorni / 30.4375);
+  if (mesi < 24) return `${mesi} mesi`;
+  const anni = Math.floor(mesi / 12);
+  const resto = mesi % 12;
+  if (resto === 0) return `${anni} anni`;
+  return `${anni} anni e ${resto} ${resto === 1 ? 'mese' : 'mesi'}`;
+}

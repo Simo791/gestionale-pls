@@ -5,7 +5,15 @@ export const schemaEmail = z.object({
   email: z.string().trim().toLowerCase().min(3, 'Inserisci la tua email').email('Email non valida'),
 });
 
-/** Codice a 6 cifre: usato sia per l'OTP via email sia per il TOTP dell'app di autenticazione. */
+/**
+ * Codice ricevuto via email (OTP). La lunghezza dipende dall'impostazione
+ * "Email OTP Length" di Supabase (6–10 cifre; sui progetti online di default 8).
+ */
+export const schemaCodiceEmail = z.object({
+  codice: z.string().trim().regex(/^\d{6,10}$/, 'Inserisci il codice ricevuto via email (solo cifre)'),
+});
+
+/** Codice a 6 cifre dell'app di autenticazione (TOTP): lo standard è sempre 6. */
 export const schemaCodice = z.object({
   codice: z.string().trim().regex(/^\d{6}$/, 'Il codice è di 6 cifre'),
 });

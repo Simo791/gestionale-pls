@@ -134,6 +134,16 @@ export interface Misurazione {
   creato_il: ISODateTime;
 }
 
+export interface Vaccinazione {
+  id: UUID;
+  pseudo_id: PseudoId;
+  vaccino: string;
+  dose: number;
+  data: ISODate;
+  lotto: string | null;
+  note: string | null;
+}
+
 // ---------- risultati delle RPC (schema api) ----------
 export interface FiglioPortale {
   paziente_id: UUID;
@@ -146,4 +156,32 @@ export interface FiglioPortale {
 export interface EsitoVerificaAudit {
   eventi_verificati: number;
   primo_evento_non_valido: number | null;
+}
+
+export interface BilancioInScadenza {
+  paziente_id: UUID;
+  nome: string;
+  cognome: string;
+  data_nascita: ISODate;
+  eta_mesi: number;
+  descrizione: string;
+  data_prevista: ISODate;
+  in_ritardo: boolean;
+}
+
+export interface ConsensoIncompleto {
+  paziente_id: UUID;
+  nome: string;
+  cognome: string;
+  finalita: 'dati_sanitari' | 'portale';
+  stato: 'parziale' | 'assente';
+  mancanti: string[];
+}
+
+export interface EventoAttivita {
+  avvenuto_il: ISODateTime;
+  ruolo: string;
+  azione: string;
+  tabella: string | null;
+  paziente: string | null;
 }

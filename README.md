@@ -18,7 +18,7 @@ di minori (GDPR art. 9) fin dal primo commit.
 | Audit | Registro in sola aggiunta con catena di hash SHA-256 e funzione di verifica |
 | Accesso | Login con codice via email (OTP) + secondo fattore TOTP per lo staff |
 | App | `apps/studio` (pediatra e segreteria) e `apps/genitori` (portale), React + Vite + Tailwind |
-| Test | 35 test pgTAP su RLS, audit e Auth Hook; test Vitest sulla logica condivisa |
+| Test | 47 test pgTAP su RLS, audit, Auth Hook e funzioni del cruscotto; test Vitest sulla logica condivisa |
 
 ## Struttura
 
@@ -56,6 +56,13 @@ pnpm dev:genitori            # http://localhost:5174
 ```
 
 Le email con il codice arrivano su Mailpit (l'indirizzo è nell'output di `supabase start`).
+
+### Dati demo estesi
+
+`supabase/seed.sql` contiene i pochi dati usati dai test. Per una demo realistica (circa 30 bambini,
+famiglie, consensi parziali, agenda di 6 settimane, visite, crescita e vaccini) esegui **dopo** il seed
+anche `supabase/seed_demo.sql` (dallo SQL Editor di Supabase o con `psql`). È rieseguibile: se trova
+già i dati non fa nulla. Tutti i dati sono inventati; il calendario vaccinale è indicativo.
 
 ### Utenti di esempio
 
