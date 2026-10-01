@@ -11,6 +11,8 @@ import {
   type ControlloEseguito,
   type Misurazione,
   type Paziente,
+  type Patologia,
+  type PatologiaPaziente,
   type Pediatra,
   type Studio,
   type TestAllergologico,
@@ -18,6 +20,8 @@ import {
 } from '@pls/shared';
 import { CATEGORIE, FONTI_ALLERGIE, GRAVITA, STATI } from '../componenti/Allergie';
 import GraficoCrescita from '../componenti/GraficoCrescita';
+import { STATI_PATOLOGIA } from '../componenti/PatologieBambino';
+import { AVVERTENZA } from '../componenti/SchedaPatologia';
 import { FONTE_CALENDARIO, type RigaLibretto } from '../componenti/LibrettoVaccinale';
 import { DocumentoStampa, TabellaStampa, type DatiBambino } from '../componenti/Stampa';
 import {
@@ -200,6 +204,32 @@ export function docVisite(base: BaseDocumento, visite: Visita[]) {
         </div>
       ))}
       {visite.length === 0 && <p>Nessuna visita registrata.</p>}
+    </DocumentoStampa>
+  );
+}
+
+export function docPatologie(base: BaseDocumento, righe: PatologiaPaziente[], catalogo: Patologia[]) {
+  const scheda = (c: string) => catalogo.find((p) => p.codice === c);
+  return (
+    <DocumentoStampa titolo="Patologie ed esenzioni" {...base}>
+      {righe.length === 0 ? <p>Nessuna patologia registrata.</p> : (
+        <TabellaStampa
+          intestazioni={['Patologia', 'Tipo', 'Codice esenzione', 'Esenzione attiva', 'Stato', 'Dal', 'Centro di riferimento']}
+          righe={righe.map((r) => {
+            const p = scheda(r.patologia);
+            return [
+              `${p?.nome ?? r.patologia}${p?.orpha ? ` (ORPHA:${p.orpha})` : ''}`,
+              p ? (p.tipo === 'rara' ? 'Malattia rara' : 'Patologia cronica') : null,
+              p?.esenzione ?? 'Non esente',
+              p?.esenzione ? (r.esenzione_attiva ? 'Sì' : 'No') : null,
+              STATI_PATOLOGIA[r.stato].testo,
+              r.data_diagnosi ? fmtGiornoIso(r.data_diagnosi) : null,
+              r.centro_riferimento,
+            ];
+          })}
+        />
+      )}
+      <Nota>{`Codici di esenzione: DPCM 12/1/2017, Allegato 7 (malattie rare) e Allegato 8 (malattie croniche). ${AVVERTENZA}`}</Nota>
     </DocumentoStampa>
   );
 }

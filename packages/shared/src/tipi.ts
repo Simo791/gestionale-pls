@@ -274,3 +274,36 @@ export interface AllergiaPaziente {
   data_diagnosi: ISODate | null;
   note: string | null;
 }
+
+/** Scheda del catalogo malattie rare e patologie croniche (consultazione, non diagnosi). */
+export interface Patologia {
+  codice: string;
+  nome: string;
+  sinonimi: string[];
+  tipo: 'rara' | 'cronica';
+  area: string;
+  esenzione: string | null;
+  orpha: number | null;
+  icd9cm: string[];
+  descrizione: string;
+  segni_allarme: string[];
+  diagnosi: string;
+  follow_up: string[];
+  specialisti: string;
+  emergenza: string | null;
+  note: string | null;
+  fonti: { titolo: string; url: string }[];
+  ordine: number;
+}
+
+export interface PatologiaPaziente {
+  id: UUID;
+  pseudo_id: UUID;
+  patologia: string;
+  stato: 'sospetta' | 'confermata' | 'esclusa';
+  data_diagnosi: string | null;
+  esenzione_attiva: boolean;
+  centro_riferimento: string | null;
+  note: string | null;
+  creato_il: string;
+}

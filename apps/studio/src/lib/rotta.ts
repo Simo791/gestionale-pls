@@ -5,14 +5,14 @@ import { useEffect, useState } from 'react';
  * niente librerie aggiuntive, il tasto "indietro" del browser funziona e
  * ogni pagina ha un indirizzo che si può salvare nei preferiti.
  */
-export type Sezione = 'cruscotto' | 'agenda' | 'assistiti' | 'consensi' | 'registro' | 'account';
+export type Sezione = 'cruscotto' | 'agenda' | 'assistiti' | 'consensi' | 'registro' | 'patologie' | 'account';
 
 export interface Rotta {
   sezione: Sezione;
   id?: string;
 }
 
-const SEZIONI: readonly Sezione[] = ['cruscotto', 'agenda', 'assistiti', 'consensi', 'registro', 'account'];
+const SEZIONI: readonly Sezione[] = ['cruscotto', 'agenda', 'assistiti', 'consensi', 'registro', 'patologie', 'account'];
 
 function leggi(): Rotta {
   const [sezione, id] = window.location.hash.replace(/^#\/?/, '').split('/');

@@ -10,6 +10,7 @@ import Agenda from './pagine/Agenda';
 import Assistiti from './pagine/Assistiti';
 import Consensi from './pagine/Consensi';
 import Cruscotto from './pagine/Cruscotto';
+import Patologie from './pagine/Patologie';
 import Registro from './pagine/Registro';
 import SchedaPaziente from './pagine/SchedaPaziente';
 import SecondoFattore from './pagine/SecondoFattore';
@@ -55,6 +56,9 @@ function Applicazione({ claims }: { claims: ClaimsApp }) {
       break;
     case 'registro':
       pagina = claims.app_ruolo === 'pediatra' ? <Registro /> : <Cruscotto claims={claims} />;
+      break;
+    case 'patologie':
+      pagina = <Patologie key={rotta.id ?? 'catalogo'} claims={claims} codice={rotta.id} />;
       break;
     case 'account':
       pagina = <Account claims={claims} />;

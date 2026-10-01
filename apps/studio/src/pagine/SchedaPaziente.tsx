@@ -17,17 +17,20 @@ import {
   type FinalitaConsenso,
   type Misurazione,
   type Paziente,
+  type Patologia,
+  type PatologiaPaziente,
   type TipoRelazione,
   type Vaccinazione,
   type Visita,
 } from '@pls/shared';
 import { useState } from 'react';
 import Allergie from '../componenti/Allergie';
+import PatologieBambino from '../componenti/PatologieBambino';
 import ControlliScreening from '../componenti/ControlliScreening';
 import LibrettoVaccinale, { righeLibretto } from '../componenti/LibrettoVaccinale';
 import { useStampa, type DatiBambino } from '../componenti/Stampa';
 import { useIntestazione } from '../lib/intestazione';
-import { docAllergie, docAnagrafica, docCrescita, docScreening, docVaccini, docVisite, type BaseDocumento } from './esportazioni';
+import { docAllergie, docAnagrafica, docPatologie, docCrescita, docScreening, docVaccini, docVisite, type BaseDocumento } from './esportazioni';
 import GraficoCrescita from '../componenti/GraficoCrescita';
 import { Badge, Bottone, Caricamento, Errore, Pannello, Vuoto } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
@@ -170,7 +173,7 @@ export default function SchedaPaziente({ id, claims }: { id: string; claims: Cla
     return { studio: intestazione.studio, medico: intestazione.medico, bambino };
   }
 
-  async function esporta(tipo: 'anagrafica' | 'vaccini' | 'crescita' | 'screening' | 'allergie' | 'visite') {
+  async function esporta(tipo: 'anagrafica' | 'vaccini' | 'crescita' | 'screening' | 'allergie' | 'patologie' | 'visite') {
     setErroreAzione(null);
     try {
       const base = await baseDocumento();
@@ -190,6 +193,13 @@ export default function SchedaPaziente({ id, claims }: { id: string; claims: Cla
       }
       if (tipo === 'crescita') return stampa(docCrescita(base, p, clinica.misure));
       if (tipo === 'visite') return stampa(docVisite(base, clinica.visite));
+      if (tipo === 'patologie') {
+        const [righe, catalogo] = await Promise.all([
+          q<PatologiaPaziente[]>(supabase.schema('clinica').from('patologie_paziente').select('*').eq('pseudo_id', clinica.pseudo).order('creato_il')),
+          q<Patologia[]>(ana().from('catalogo_patologie').select('*')),
+        ]);
+        return stampa(docPatologie(base, righe, catalogo));
+      }
       if (tipo === 'screening') {
         const [catalogo, esiti] = await Promise.all([
           q<ControlloCatalogo[]>(ana().from('catalogo_controlli').select('*').order('ordine')),
@@ -245,6 +255,7 @@ export default function SchedaPaziente({ id, claims }: { id: string; claims: Cla
             <Bottone onClick={() => void esporta('crescita')}>Curve di crescita</Bottone>
             <Bottone onClick={() => void esporta('screening')}>Screening e controlli</Bottone>
             <Bottone onClick={() => void esporta('allergie')}>Allergie</Bottone>
+            <Bottone onClick={() => void esporta('patologie')}>Patologie</Bottone>
             <Bottone onClick={() => void esporta('visite')}>Visite</Bottone>
           </>
         ) : puoVedereClinica && <span className="text-xs text-slate-500">Apri la cartella clinica per esportare i documenti clinici.</span>}
@@ -370,7 +381,7 @@ function CartellaAperta({ dati, paziente, onVacciniCambiati }: { dati: DatiClini
       <Pannello titolo="Cartella clinica" sottotitolo="Apertura registrata nel registro di audit">
         <dl className="grid gap-4 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-slate-500">Patologie croniche</dt>
+            <dt className="text-slate-500">Annotazioni libere</dt>
             <dd className="mt-1 flex flex-wrap gap-1">
               {cartella?.patologie_croniche.length ? cartella.patologie_croniche.map((a) => <Badge key={a} tono="attenzione">{a}</Badge>) : 'Nessuna'}
             </dd>
@@ -380,6 +391,10 @@ function CartellaAperta({ dati, paziente, onVacciniCambiati }: { dati: DatiClini
             <dd className="mt-1 text-slate-700">{cartella?.note_anamnesi ?? '—'}</dd>
           </div>
         </dl>
+      </Pannello>
+
+      <Pannello titolo="Patologie ed esenzioni" sottotitolo="Malattie rare e croniche collegate al catalogo, con codice di esenzione">
+        <PatologieBambino pseudoId={pseudo} />
       </Pannello>
 
       <Pannello titolo="Allergie" sottotitolo="Allergeni, reazione, gravità e test eseguiti">

@@ -257,3 +257,25 @@ begin
   raise notice 'Allergie di esempio create.';
 end;
 $$;
+
+-- =============================================================================
+-- Patologie strutturate (blocco 3): dalle annotazioni libere della cartella
+-- =============================================================================
+do $$
+begin
+  if exists (select 1 from clinica.patologie_paziente) then
+    raise notice 'Patologie già presenti: nessuna modifica.';
+    return;
+  end if;
+  insert into clinica.patologie_paziente (pseudo_id, patologia, stato, data_diagnosi, note)
+  select c.pseudo_id, 'asma', 'confermata', current_date - 400, 'Asma lieve intermittente. Dato di esempio.'
+  from clinica.cartelle c where 'Asma lieve intermittente' = any(c.patologie_croniche);
+  -- un caso di esempio di celiachia con esenzione attiva
+  insert into clinica.patologie_paziente (pseudo_id, patologia, stato, data_diagnosi, esenzione_attiva, centro_riferimento, note)
+  select c.pseudo_id, 'celiachia', 'confermata', current_date - 250, true, 'Gastroenterologia pediatrica (esempio)', 'Dato di esempio.'
+  from clinica.cartelle c
+  where not exists (select 1 from clinica.patologie_paziente p where p.pseudo_id = c.pseudo_id)
+  order by c.pseudo_id limit 1;
+  raise notice 'Patologie di esempio create.';
+end;
+$$;
