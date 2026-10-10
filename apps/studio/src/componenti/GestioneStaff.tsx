@@ -21,7 +21,7 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
       .gte('al', oggiIso()).is('revocata_il', null).order('dal')),
     [],
   );
-  const [nuovo, setNuovo] = useState({ nome: '', cognome: '', email: '', ruolo: 'segreteria' as 'segreteria' | 'sostituto' });
+  const [nuovo, setNuovo] = useState({ nome: '', cognome: '', email: '', ruolo: 'segreteria' as 'segreteria' | 'sostituto' | 'allergologo' });
   const [turno, setTurno] = useState({ sostituto: '', dal: oggiIso(), al: oggiIso(), consegne: '' });
   const [esito, setEsito] = useState<{ ok: boolean; testo: string } | null>(null);
   const [invio, setInvio] = useState(false);
@@ -36,6 +36,22 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
     if (errore) return setEsito({ ok: false, testo: `Aggiunta non riuscita: ${errore}` });
     setEsito({ ok: true, testo: `${nuovo.nome} ${nuovo.cognome} aggiunto come ${etichettaRuolo(nuovo.ruolo).toLowerCase()}. Accede con il codice via email e configura il secondo fattore.` });
     setNuovo({ nome: '', cognome: '', email: '', ruolo: nuovo.ruolo });
+    membri.ricarica();
+  }
+
+  async function amministratore(m: MembroStudio, si: boolean) {
+    setEsito(null);
+    const { error } = await supabase.schema('api').rpc('imposta_amministratore', { p_utente: m.utente_id, p_amministratore: si });
+    if (error) return setEsito({ ok: false, testo: error.message });
+    setEsito({ ok: true, testo: `${nomeMembro(m)} ${si ? 'è ora amministratore' : 'non è più amministratore'}. Vale dal prossimo accesso (esci e rientra).` });
+    membri.ricarica();
+  }
+
+  async function tuttiAmministratori() {
+    setEsito(null);
+    const { data, error } = await supabase.schema('api').rpc('tutti_amministratori');
+    if (error) return setEsito({ ok: false, testo: error.message });
+    setEsito({ ok: true, testo: `${data as number} membri nominati amministratori. Vale dal loro prossimo accesso.` });
     membri.ricarica();
   }
 
@@ -74,7 +90,7 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
       {esito && <p role="status" className={`rounded-lg p-3 text-sm ${esito.ok ? 'bg-emerald-50 text-emerald-900' : 'bg-red-50 text-red-900'}`}>{esito.testo}</p>}
 
       {claims.app_admin && (
-        <Pannello titolo="Staff dello studio" sottotitolo="Sei amministratore: aggiungi e disattivi segreteria e sostituti">
+        <Pannello titolo="Staff dello studio" sottotitolo="Sei amministratore: aggiungi, disattivi e nomini amministratori i membri dello studio">
           {membri.errore ? <Errore messaggio={membri.errore} /> : (
             <ul className="divide-y divide-slate-100">
               {(membri.dati ?? []).map((m) => (
@@ -87,6 +103,11 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
                     <Badge tono={m.ruolo === 'pediatra' ? 'info' : 'neutro'}>{etichettaRuolo(m.ruolo)}</Badge>
                     {m.amministratore && <Badge tono="ok">Amministratore</Badge>}
                     {!m.attivo && <Badge tono="attenzione">Disattivato</Badge>}
+                    {m.attivo && m.utente_id !== claims.sub && (
+                      <Bottone onClick={() => void amministratore(m, !m.amministratore)}>
+                        {m.amministratore ? 'Togli amministratore' : 'Rendi amministratore'}
+                      </Bottone>
+                    )}
                     {!m.amministratore && m.utente_id !== claims.sub && (
                       <Bottone variante={m.attivo ? 'pericolo' : 'secondario'} onClick={() => void attiva(m, !m.attivo)}>
                         {m.attivo ? 'Disattiva' : 'Riattiva'}
@@ -97,6 +118,11 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
               ))}
             </ul>
           )}
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+            <span className="flex-1">Fase beta: puoi nominare amministratore qualunque membro. L'amministratore gestisce staff e moduli e accede
+              all'Allergologia, ma non apre le cartelle degli assistiti (restano al pediatra titolare e al sostituto in servizio).</span>
+            <Bottone onClick={() => void tuttiAmministratori()}>Rendi tutti amministratori</Bottone>
+          </div>
           <form onSubmit={(e) => void aggiungi(e)} className="mt-4 grid gap-3 rounded-lg border border-slate-200 p-3 md:grid-cols-2">
             <p className="text-sm font-medium text-slate-800 md:col-span-2">Aggiungi un membro</p>
             <label className="text-sm"><span className="block text-slate-500">Nome</span>
@@ -106,9 +132,10 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
             <label className="text-sm"><span className="block text-slate-500">Email (servirà per accedere)</span>
               <input required type="email" value={nuovo.email} onChange={(e) => setNuovo({ ...nuovo, email: e.target.value })} className={stileInput} /></label>
             <label className="text-sm"><span className="block text-slate-500">Ruolo</span>
-              <select value={nuovo.ruolo} onChange={(e) => setNuovo({ ...nuovo, ruolo: e.target.value as 'segreteria' | 'sostituto' })} className={stileInput}>
+              <select value={nuovo.ruolo} onChange={(e) => setNuovo({ ...nuovo, ruolo: e.target.value as 'segreteria' | 'sostituto' | 'allergologo' })} className={stileInput}>
                 <option value="segreteria">Segreteria (agenda, anagrafiche, consensi: niente dati clinici)</option>
                 <option value="sostituto">Sostituto (dati clinici solo nei periodi di sostituzione)</option>
+                <option value="allergologo">Allergologo pediatra (solo modulo Allergologia, già accettato)</option>
               </select></label>
             <div className="md:col-span-2"><Bottone type="submit" variante="primario" disabled={invio}>{invio ? 'Aggiunta…' : 'Aggiungi'}</Bottone></div>
           </form>

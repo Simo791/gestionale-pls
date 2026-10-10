@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { etaDaGiorni, etaInGiorni, etaLeggibile } from './eta';
+import { etaDaGiorni, etaEstesa, etaInGiorni, etaLeggibile } from './eta';
 
 describe('etaInGiorni', () => {
   it('conta i giorni tra nascita e misurazione', () => {
@@ -36,5 +36,19 @@ describe('etaDaGiorni', () => {
     expect(etaDaGiorni(183)).toBe('6 mesi');
     expect(etaDaGiorni(731)).toBe('2 anni');
     expect(etaDaGiorni(1300)).toBe('3 anni e 6 mesi');
+  });
+});
+
+describe('etaEstesa', () => {
+  it('anni, mesi e giorni compiuti', () => {
+    expect(etaEstesa('2022-03-10', '2026-10-22')).toBe('4 anni, 7 mesi e 12 giorni');
+  });
+  it('omette le parti a zero', () => {
+    expect(etaEstesa('2026-10-01', '2026-10-01')).toBe('0 giorni');
+    expect(etaEstesa('2025-10-10', '2026-10-10')).toBe('1 anno');
+    expect(etaEstesa('2026-09-01', '2026-10-03')).toBe('1 mese e 2 giorni');
+  });
+  it('fine mese: nato il 31 gennaio, al 1° marzo ha 1 mese e 1 giorno', () => {
+    expect(etaEstesa('2026-01-31', '2026-03-01')).toBe('1 mese e 1 giorno');
   });
 });

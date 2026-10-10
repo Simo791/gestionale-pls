@@ -46,3 +46,31 @@ export function etaDaGiorni(giorni: number): string {
   if (resto === 0) return `${anni} anni`;
   return `${anni} anni e ${resto} ${resto === 1 ? 'mese' : 'mesi'}`;
 }
+
+/** Aggiunge mesi a una data; se il giorno non esiste (es. 31 febbraio) usa l'ultimo del mese. */
+function piuMesiUtc(data: ISODate, mesi: number): number {
+  const [a, m, g] = data.split('-').map(Number) as [number, number, number];
+  const ultimo = new Date(Date.UTC(a, m - 1 + mesi + 1, 0)).getUTCDate();
+  return Date.UTC(a, m - 1 + mesi, Math.min(g, ultimo));
+}
+
+/** Età in anni, mesi e giorni compiuti (calendario). */
+export function etaComponenti(dataNascita: ISODate, oggi: ISODate): { anni: number; mesi: number; giorni: number } {
+  const fine = utc(oggi);
+  if (fine < utc(dataNascita)) throw new Error('Data di nascita futura');
+  let totaleMesi = 0;
+  while (piuMesiUtc(dataNascita, totaleMesi + 1) <= fine) totaleMesi++;
+  const giorni = Math.round((fine - piuMesiUtc(dataNascita, totaleMesi)) / GIORNO_MS);
+  return { anni: Math.floor(totaleMesi / 12), mesi: totaleMesi % 12, giorni };
+}
+
+/** Età estesa: "2 anni, 4 mesi e 12 giorni" (le parti a zero si omettono). */
+export function etaEstesa(dataNascita: ISODate, oggi: ISODate): string {
+  const { anni, mesi, giorni } = etaComponenti(dataNascita, oggi);
+  const parti = [
+    anni ? `${anni} ${anni === 1 ? 'anno' : 'anni'}` : '',
+    mesi ? `${mesi} ${mesi === 1 ? 'mese' : 'mesi'}` : '',
+    giorni || (!anni && !mesi) ? `${giorni} ${giorni === 1 ? 'giorno' : 'giorni'}` : '',
+  ].filter(Boolean);
+  return parti.length > 1 ? `${parti.slice(0, -1).join(', ')} e ${parti[parti.length - 1]}` : parti[0]!;
+}

@@ -13,16 +13,20 @@ import {
   type Paziente,
   type Patologia,
   type PatologiaPaziente,
+  type CampoModello,
+  type TipoRelazione,
   type TipoVisita,
   type Vaccinazione,
   type Visita,
 } from '@pls/shared';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { q, useDati } from '../lib/dati';
-import { ETICHETTA_TIPO_VISITA, fmtData, fmtGiornoIso, oggiIso } from '../lib/formato';
+import { ETICHETTA_RELAZIONE, ETICHETTA_TIPO_VISITA, fmtData, fmtGiornoIso, oggiIso } from '../lib/formato';
 import { link } from '../lib/rotta';
 import { supabase } from '../lib/supabase';
+import InserisciModello from './InserisciModello';
 import { righeLibretto } from './LibrettoVaccinale';
+import SceltaDiagnosi from './SceltaDiagnosi';
 import { Badge, Bottone, Errore, Vuoto, type Tono } from './ui';
 
 const stileInput = 'w-full rounded-lg border border-slate-300 px-2 py-1.5';
@@ -69,8 +73,9 @@ export function parametriVitali(v: Visita) {
  * della visita con misure antropometriche, parametri vitali e indicazioni.
  */
 export default function VisitaOdierna({
-  pseudo, paziente, cartella, misure, vaccini, visite, onSalvata, onChiudi,
+  pseudo, paziente, cartella, misure, vaccini, visite, genitori, onSalvata, onChiudi,
 }: {
+  genitori: { nome: string; tipo: TipoRelazione }[];
   pseudo: string;
   paziente: Paziente;
   cartella: CartellaClinica | null;
@@ -87,9 +92,12 @@ export default function VisitaOdierna({
 
   const [f, setF] = useState({
     tipo: 'ambulatoriale' as TipoVisita, motivo: '', anamnesi: '', peso: '', altezza: '', cc: '',
-    temperatura: '', fc: '', fr: '', spo2: '', pas: '', pad: '', esame: '', diagnosi: '', terapia: '',
+    temperatura: '', fc: '', fr: '', spo2: '', pas: '', pad: '', esame: '', terapia: '',
     indicazioni: '', prossimo: '',
   });
+  const [codici, setCodici] = useState<string[]>([]);
+  const [presenti, setPresenti] = useState<string[]>([]);
+  const [altro, setAltro] = useState({ attivo: false, testo: '' });
   const [scelti, setScelti] = useState<Set<string>>(new Set());
   const [errore, setErrore] = useState<string | null>(null);
   const [salvataggio, setSalvataggio] = useState(false);
@@ -118,7 +126,8 @@ export default function VisitaOdierna({
     for (const r of righeLibretto(cal, vaccini, paziente.data_nascita)) {
       if (r.eseguita || r.dal > limite) continue;
       const etichetta = `${r.dose.vaccino}, dose ${r.dose.dose}`;
-      const stato = r.stato.testo === 'In ritardo' ? 'in ritardo' : r.stato.testo === 'Da fare ora' ? 'da fare ora' : `dal ${fmtGiornoIso(r.dal)}`;
+      const stato = r.livello === 'scaduta' ? 'scaduta, da recuperare'
+        : r.dal <= oggi ? `da eseguire entro il ${fmtGiornoIso(r.al)}` : `dal ${fmtGiornoIso(r.dal)} al ${fmtGiornoIso(r.al)}`;
       suggerimenti.push({
         id: `v-${r.dose.codice}`, gruppo: 'Vaccinazioni', tono: r.stato.tono,
         testo: `${etichetta} (${stato}${r.dose.obbligatoria ? ', obbligatoria' : ''})`,
@@ -202,9 +211,11 @@ export default function VisitaOdierna({
     if ((n.pas === null) !== (n.pad === null) || (n.pas !== null && n.pad !== null && n.pas <= n.pad)) {
       return setErrore('Pressione arteriosa: inserisci sistolica e diastolica (la sistolica è più alta).');
     }
-    const diagnosi = f.diagnosi.split(/[\s,;]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
+    const diagnosi = codici;
     const errati = diagnosi.filter((d) => !CODICE_ICD9.test(d));
-    if (errati.length) return setErrore(`Codici ICD-9-CM non riconosciuti: ${errati.join(', ')} (es. 465.9, 382.9, V20.2).`);
+    if (errati.length) return setErrore(`Codici ICD-9-CM non riconosciuti: ${errati.join(', ')}.`);
+    if (altro.attivo && !altro.testo.trim()) return setErrore('Indica chi accompagna il bambino («Altro»).');
+    const accompagnatori = [...presenti, ...(altro.attivo ? [altro.testo.trim()] : [])];
 
     setSalvataggio(true);
     try {
@@ -213,7 +224,7 @@ export default function VisitaOdierna({
         esame_obiettivo: f.esame.trim() || null, diagnosi_icd9cm: diagnosi, terapia: f.terapia.trim() || null,
         temperatura_c: n.temperatura, frequenza_cardiaca: n.fc, frequenza_respiratoria: n.fr, saturazione_o2: n.spo2,
         pa_sistolica: n.pas, pa_diastolica: n.pad, indicazioni_genitori: f.indicazioni.trim() || null,
-        prossimo_controllo: f.prossimo || null,
+        prossimo_controllo: f.prossimo || null, accompagnatori,
       }).select('*').single());
       let misura: Misurazione | null = null;
       if (n.peso !== null || n.altezza !== null || n.cc !== null) {
@@ -231,16 +242,28 @@ export default function VisitaOdierna({
   }
 
   const gruppi = [...new Set(suggerimenti.map((s) => s.gruppo))];
-  const campo = (k: keyof typeof f, etichetta: string, extra?: { tipo?: string; aiuto?: ReactNode; area?: boolean; largo?: boolean; richiesto?: boolean }) => (
-    <label className={`text-sm ${extra?.largo ? 'md:col-span-2' : ''}`}>
-      <span className="block text-slate-500">{etichetta}</span>
-      {extra?.area
-        ? <textarea rows={3} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} className={stileInput} />
-        : <input type={extra?.tipo ?? 'text'} inputMode={extra?.tipo ? undefined : 'decimal'} required={extra?.richiesto}
-                 value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} className={stileInput} />}
-      {extra?.aiuto && <span className="text-xs text-slate-500">{extra.aiuto}</span>}
-    </label>
-  );
+  const aggiungiTesto = (k: keyof typeof f, testo: string) => setF((prima) => ({ ...prima, [k]: [prima[k].trim(), testo].filter(Boolean).join('\n') }));
+  const campo = (k: keyof typeof f, etichetta: string, extra?: { tipo?: string; aiuto?: ReactNode; area?: boolean; largo?: boolean; richiesto?: boolean; modello?: CampoModello }) => {
+    const controllo = extra?.area
+      ? <textarea rows={3} aria-label={etichetta} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} className={stileInput} />
+      : <input type={extra?.tipo ?? 'text'} aria-label={etichetta} inputMode={extra?.tipo ? undefined : 'decimal'} required={extra?.richiesto}
+               value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} className={stileInput} />;
+    const classe = `text-sm ${extra?.largo ? 'md:col-span-2' : ''}`;
+    const aiuto = extra?.aiuto && <span className="text-xs text-slate-500">{extra.aiuto}</span>;
+    // Con il menu dei modelli il contenitore non è una <label> (conterrebbe due controlli).
+    return extra?.modello ? (
+      <div className={classe}>
+        <div className="flex items-center justify-between gap-2 text-slate-500">
+          <span>{etichetta}</span>
+          <InserisciModello campo={extra.modello} onInserisci={(t) => aggiungiTesto(k, t)} />
+        </div>
+        {controllo}{aiuto}
+      </div>
+    ) : (
+      <label className={classe}><span className="block text-slate-500">{etichetta}</span>{controllo}{aiuto}</label>
+    );
+  };
+
   const percentile = (x: ReturnType<typeof misuraLive>) => x && (
     <span className={x.anomalo ? 'text-amber-700' : ''}>
       Percentile OMS: {fmtPercentile(x.p)}{x.anomalo && ' · valore molto lontano dalle curve: verifica l\'inserimento'}
@@ -321,7 +344,30 @@ export default function VisitaOdierna({
             </select>
           </label>
           {campo('motivo', 'Motivo della visita', { tipo: 'text', richiesto: true })}
-          {campo('anamnesi', 'Anamnesi recente', { area: true, largo: true })}
+          <fieldset className="text-sm md:col-span-2">
+            <legend className="text-slate-500">Presenti alla visita</legend>
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+              {genitori.map((g) => {
+                const etichetta = `${ETICHETTA_RELAZIONE[g.tipo]} (${g.nome})`;
+                return (
+                  <label key={etichetta} className="flex items-center gap-1.5">
+                    <input type="checkbox" checked={presenti.includes(etichetta)}
+                           onChange={(e) => setPresenti(e.target.checked ? [...presenti, etichetta] : presenti.filter((x) => x !== etichetta))} />
+                    {etichetta}
+                  </label>
+                );
+              })}
+              <label className="flex items-center gap-1.5">
+                <input type="checkbox" checked={altro.attivo} onChange={(e) => setAltro({ ...altro, attivo: e.target.checked })} /> Altro
+              </label>
+              {altro.attivo && (
+                <input autoFocus value={altro.testo} onChange={(e) => setAltro({ ...altro, testo: e.target.value })}
+                       placeholder="Es. nonna materna, zio, baby-sitter con delega" aria-label="Chi accompagna il bambino"
+                       className="min-w-64 flex-1 rounded-lg border border-slate-300 px-2 py-1" />
+              )}
+            </div>
+          </fieldset>
+          {campo('anamnesi', 'Anamnesi recente', { area: true, largo: true, modello: 'anamnesi' })}
         </div>
 
         <fieldset className="rounded-lg border border-slate-200 p-3">
@@ -347,11 +393,11 @@ export default function VisitaOdierna({
         </fieldset>
 
         <div className="grid gap-3 md:grid-cols-2">
-          {campo('esame', 'Esame obiettivo', { area: true, largo: true })}
-          {campo('diagnosi', 'Diagnosi, codici ICD-9-CM', { tipo: 'text', aiuto: 'Separati da virgola, es. 465.9, 382.9 (lasciare vuoto se non pertinente)' })}
+          {campo('esame', 'Esame obiettivo', { area: true, largo: true, modello: 'esame_obiettivo' })}
+          <SceltaDiagnosi valore={codici} onChange={setCodici} />
           {campo('prossimo', 'Prossimo controllo', { tipo: 'date' })}
-          {campo('terapia', 'Terapia', { area: true, largo: true })}
-          {campo('indicazioni', 'Indicazioni per i genitori (compaiono nel referto)', { area: true, largo: true })}
+          {campo('terapia', 'Terapia', { area: true, largo: true, modello: 'terapia' })}
+          {campo('indicazioni', 'Indicazioni per i genitori (compaiono nel referto)', { area: true, largo: true, modello: 'indicazioni' })}
         </div>
 
         <div className="flex flex-wrap gap-2">

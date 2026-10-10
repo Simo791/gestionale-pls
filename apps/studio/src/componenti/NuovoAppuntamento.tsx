@@ -15,20 +15,24 @@ const TIPI = Object.keys(ETICHETTA_TIPO) as TipoAppuntamento[];
 export default function NuovoAppuntamento({
   claims,
   giornoIniziale,
+  pazienteIniziale,
+  tipoIniziale,
   onCreato,
   onAnnulla,
 }: {
   claims: ClaimsApp;
   giornoIniziale: string;
+  pazienteIniziale?: string;
+  tipoIniziale?: TipoAppuntamento;
   onCreato: () => void;
   onAnnulla: () => void;
 }) {
   const [cerca, setCerca] = useState('');
-  const [pazienteId, setPazienteId] = useState('');
+  const [pazienteId, setPazienteId] = useState(pazienteIniziale ?? '');
   const [giorno, setGiorno] = useState(giornoIniziale);
   const [ora, setOra] = useState('09:00');
   const [durata, setDurata] = useState(20);
-  const [tipo, setTipo] = useState<TipoAppuntamento>('visita');
+  const [tipo, setTipo] = useState<TipoAppuntamento>(tipoIniziale ?? 'visita');
   const [note, setNote] = useState('');
   const [errore, setErrore] = useState<string | null>(null);
   const [inCorso, setInCorso] = useState(false);

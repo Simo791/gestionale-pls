@@ -10,12 +10,15 @@ interface Voce {
   etichetta: string;
   icona: string; // percorso SVG (24x24, stroke)
   soloPediatra?: boolean;
+  /** Solo per chi è abilitato al modulo Allergologia. */
+  allergologia?: boolean;
 }
 
 const VOCI: Voce[] = [
-  { sezione: 'cruscotto', etichetta: 'Cruscotto', icona: 'M3 12l9-8 9 8M5 10v10h5v-6h4v6h5V10' },
+  { sezione: 'cruscotto', etichetta: 'Home', icona: 'M3 12l9-8 9 8M5 10v10h5v-6h4v6h5V10' },
   { sezione: 'agenda', etichetta: 'Agenda', icona: 'M7 3v3M17 3v3M4 8h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z' },
   { sezione: 'assistiti', etichetta: 'Assistiti', icona: 'M16 19v-1a4 4 0 00-4-4H8a4 4 0 00-4 4v1M10 10a3 3 0 100-6 3 3 0 000 6M20 19v-1a4 4 0 00-3-3.9M15 4.1a3 3 0 010 5.8' },
+  { sezione: 'allergologia', etichetta: 'Allergologia', icona: 'M12 3v4M12 17v4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M3 12h4M17 12h4M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8M12 9a3 3 0 100 6 3 3 0 000-6', allergologia: true },
   { sezione: 'consensi', etichetta: 'Consensi', icona: 'M9 12l2 2 4-4M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z' },
   { sezione: 'registro', etichetta: 'Registro accessi', icona: 'M9 5h10M9 12h10M9 19h10M5 5h.01M5 12h.01M5 19h.01', soloPediatra: true },
   { sezione: 'patologie', etichetta: 'Patologie', icona: 'M4 5a2 2 0 012-2h12v16H6a2 2 0 00-2 2V5zM4 19a2 2 0 012-2h12M9 7h6M12 4v6' },
@@ -42,7 +45,10 @@ export default function Layout({
   children: ReactNode;
 }) {
   const [menuAperto, setMenuAperto] = useState(false);
-  const voci = VOCI.filter((v) => !v.soloPediatra || claims.app_ruolo === 'pediatra');
+  // L'allergologo usa solo il suo modulo; gli altri vedono Allergologia solo se abilitati.
+  const voci = claims.app_ruolo === 'allergologo'
+    ? VOCI.filter((v) => v.sezione === 'allergologia' || v.sezione === 'account')
+    : VOCI.filter((v) => (!v.soloPediatra || claims.app_ruolo === 'pediatra') && (!v.allergologia || claims.app_allergologia));
 
   const menu = (
     <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Menu principale">

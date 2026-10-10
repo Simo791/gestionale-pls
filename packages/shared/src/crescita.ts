@@ -1,4 +1,5 @@
-import { LMS_OMS, type Indicatore } from './crescita-oms';
+import { LMS_CACCIARI } from './crescita-cacciari';
+import { LMS_OMS, type Indicatore, type RigaLms } from './crescita-oms';
 import type { Sesso } from './tipi';
 
 export type { Indicatore } from './crescita-oms';
@@ -9,26 +10,74 @@ export interface Lms {
   S: number;
 }
 
-/** Percentili mostrati nelle curve, con il relativo z-score. */
-export const PERCENTILI = [
-  { p: 3, z: -1.880794 },
-  { p: 15, z: -1.036433 },
-  { p: 50, z: 0 },
-  { p: 85, z: 1.036433 },
-  { p: 97, z: 1.880794 },
-] as const;
+/**
+ * Curve di riferimento disponibili:
+ *  - 'oms': WHO Child Growth Standards 2006 (0–5 anni) + WHO Growth Reference 2007
+ *    (altezza fino a 19 anni, peso fino a 10 anni); unica con la circonferenza cranica (0–5 anni);
+ *  - 'cacciari': curve italiane SIEDP (Cacciari et al. 2006), peso e altezza 2–20 anni.
+ */
+export type Riferimento = 'oms' | 'cacciari';
+
+const Z = { 3: -1.880794, 10: -1.281552, 15: -1.036433, 25: -0.67449, 50: 0, 75: 0.67449, 85: 1.036433, 90: 1.281552, 97: 1.880794 } as const;
+export type Percentile = keyof typeof Z;
+
+export const RIFERIMENTI: Record<Riferimento, {
+  nome: string;
+  fonte: string;
+  /** Percentili disegnati (convenzione della curva). */
+  percentili: readonly Percentile[];
+  /** Fascia interna evidenziata. */
+  fasciaInterna: readonly [Percentile, Percentile];
+}> = {
+  oms: {
+    nome: 'OMS',
+    fonte: 'WHO Child Growth Standards 2006 (0–5 anni) e WHO Growth Reference 2007 (5–19 anni)',
+    percentili: [3, 15, 50, 85, 97],
+    fasciaInterna: [15, 85],
+  },
+  cacciari: {
+    nome: 'Cacciari (SIEDP 2006)',
+    fonte: 'Cacciari E. et al., Italian cross-sectional growth charts for height, weight and BMI (2 to 20 yr), J Endocrinol Invest 2006',
+    percentili: [3, 10, 25, 50, 75, 90, 97],
+    fasciaInterna: [25, 75],
+  },
+};
+
+/** Percentili OMS (compatibilità con il codice precedente). */
+export const PERCENTILI = RIFERIMENTI.oms.percentili.map((p) => ({ p, z: Z[p] }));
 
 export const GIORNI_PER_MESE = 30.4375;
 
-/** Età massima (in mesi) coperta dalle tabelle OMS per ciascun indicatore. */
-export function etaMassimaMesi(indicatore: Indicatore, sesso: Sesso): number {
-  const righe = LMS_OMS[indicatore][sesso];
-  return righe[righe.length - 1]?.[0] ?? 0;
+/** Età (5 anni) oltre la quale si usano di norma le curve italiane per peso e altezza. */
+export const ETA_PASSAGGIO_CACCIARI_MESI = 60;
+
+function tabella(indicatore: Indicatore, sesso: Sesso, rif: Riferimento): readonly RigaLms[] | null {
+  if (rif === 'oms') return LMS_OMS[indicatore][sesso];
+  return indicatore === 'circonferenza_cranica' ? null : LMS_CACCIARI[indicatore][sesso];
 }
 
-/** Parametri LMS all'età indicata (interpolazione lineare tra i mesi). Null fuori tabella. */
-export function lmsAEta(indicatore: Indicatore, sesso: Sesso, mesi: number): Lms | null {
-  const righe = LMS_OMS[indicatore][sesso];
+/** Riferimento consigliato: OMS fino a 5 anni (e sempre per la circonferenza cranica), poi Cacciari. */
+export function riferimentoPredefinito(etaGiorni: number, indicatore: Indicatore = 'peso'): Riferimento {
+  if (indicatore === 'circonferenza_cranica') return 'oms';
+  return etaGiorni / GIORNI_PER_MESE < ETA_PASSAGGIO_CACCIARI_MESI ? 'oms' : 'cacciari';
+}
+
+/** Indicatori disponibili in un riferimento. */
+export const disponibile = (indicatore: Indicatore, rif: Riferimento) => tabella(indicatore, 'M', rif) !== null;
+
+/** Età minima e massima (in mesi) coperte dalle tabelle. */
+export function etaMinimaMesi(indicatore: Indicatore, sesso: Sesso, rif: Riferimento = 'oms'): number {
+  return tabella(indicatore, sesso, rif)?.[0]?.[0] ?? 0;
+}
+export function etaMassimaMesi(indicatore: Indicatore, sesso: Sesso, rif: Riferimento = 'oms'): number {
+  const righe = tabella(indicatore, sesso, rif);
+  return righe?.[righe.length - 1]?.[0] ?? 0;
+}
+
+/** Parametri LMS all'età indicata (interpolazione lineare). Null fuori tabella. */
+export function lmsAEta(indicatore: Indicatore, sesso: Sesso, mesi: number, rif: Riferimento = 'oms'): Lms | null {
+  const righe = tabella(indicatore, sesso, rif);
+  if (!righe) return null;
   const primo = righe[0];
   const ultimo = righe[righe.length - 1];
   if (!primo || !ultimo || mesi < primo[0] || mesi > ultimo[0]) return null;
@@ -63,39 +112,34 @@ export function normaleCdf(z: number): number {
 }
 
 /**
- * Percentile (0–100) di una misura all'età in giorni. Null se l'età è fuori dalle tabelle.
- * Solo informativo: non è un giudizio clinico.
+ * Percentile (0–100) di una misura all'età in giorni. Senza riferimento esplicito usa quello
+ * consigliato per l'età. Null se l'età è fuori dalle tabelle. Solo informativo.
  */
-export function percentileMisura(indicatore: Indicatore, sesso: Sesso, etaGiorni: number, valore: number): number | null {
-  const lms = lmsAEta(indicatore, sesso, etaGiorni / GIORNI_PER_MESE);
+export function percentileMisura(
+  indicatore: Indicatore, sesso: Sesso, etaGiorni: number, valore: number, rif: Riferimento = riferimentoPredefinito(etaGiorni, indicatore),
+): number | null {
+  const lms = lmsAEta(indicatore, sesso, etaGiorni / GIORNI_PER_MESE, rif);
   if (!lms || valore <= 0) return null;
   return normaleCdf(zDaValore(lms, valore)) * 100;
 }
 
 export interface PuntoCurva {
   mesi: number;
-  p3: number;
-  p15: number;
-  p50: number;
-  p85: number;
-  p97: number;
+  /** Valore della misura per ciascun percentile del riferimento. */
+  valori: Partial<Record<Percentile, number>>;
 }
 
-/** Curve dei percentili 3–15–50–85–97 da 0 a mesiMax, un punto per mese. */
-export function curvePercentili(indicatore: Indicatore, sesso: Sesso, mesiMax: number): PuntoCurva[] {
-  const fine = Math.min(mesiMax, etaMassimaMesi(indicatore, sesso));
+/** Curve dei percentili del riferimento, un punto per mese, entro la copertura della tabella. */
+export function curvePercentili(indicatore: Indicatore, sesso: Sesso, mesiMax: number, rif: Riferimento = 'oms'): PuntoCurva[] {
+  const inizio = etaMinimaMesi(indicatore, sesso, rif);
+  const fine = Math.min(mesiMax, etaMassimaMesi(indicatore, sesso, rif));
   const punti: PuntoCurva[] = [];
-  for (let m = 0; m <= fine; m++) {
-    const lms = lmsAEta(indicatore, sesso, m);
+  for (let m = inizio; m <= fine; m++) {
+    const lms = lmsAEta(indicatore, sesso, m, rif);
     if (!lms) continue;
-    punti.push({
-      mesi: m,
-      p3: valoreDaZ(lms, PERCENTILI[0].z),
-      p15: valoreDaZ(lms, PERCENTILI[1].z),
-      p50: valoreDaZ(lms, PERCENTILI[2].z),
-      p85: valoreDaZ(lms, PERCENTILI[3].z),
-      p97: valoreDaZ(lms, PERCENTILI[4].z),
-    });
+    const valori: PuntoCurva['valori'] = {};
+    for (const p of RIFERIMENTI[rif].percentili) valori[p] = valoreDaZ(lms, Z[p]);
+    punti.push({ mesi: m, valori });
   }
   return punti;
 }

@@ -62,6 +62,15 @@ export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
     return count ?? 0;
   }, []);
 
+  const daRichiamare = useDati(async () => {
+    const oggi = new Date();
+    const iso = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}-${String(oggi.getDate()).padStart(2, '0')}`;
+    const { count, error } = await ana().from('richiami').select('id', { count: 'exact', head: true })
+      .eq('stato', 'aperto').lte('ricontattare_dal', iso);
+    if (error) throw new Error(error.message);
+    return count ?? 0;
+  }, []);
+
   const bilanci = useDati(() => q<BilancioInScadenza[]>(api().rpc('bilanci_in_scadenza', { p_giorni: 60 })), []);
   const consensi = useDati(() => q<ConsensoIncompleto[]>(api().rpc('consensi_incompleti')), []);
   const audit = useDati(
@@ -86,7 +95,7 @@ export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Cruscotto</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Home</h1>
           <p className="text-sm capitalize text-slate-500">{fmtGiornoLungo(new Date())}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -106,12 +115,14 @@ export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
 
       {accessoRapido && <AccessoRapido claims={claims} onChiudi={() => setAccessoRapido(false)} />}
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Kpi etichetta="Appuntamenti oggi" valore={oggi.dati?.length ?? '…'}
              nota={daConfermareOggi ? `${daConfermareOggi} da confermare` : 'Tutti confermati'}
              tono="info" href={link('agenda')} />
         <Kpi etichetta="Richieste da confermare" valore={richieste.dati ?? '…'}
              nota="Prenotazioni future in attesa" tono={richieste.dati ? 'attenzione' : 'ok'} href={link('agenda')} />
+        <Kpi etichetta="Da ricontattare" valore={daRichiamare.dati ?? '…'}
+             nota="Genitori da richiamare oggi" tono={daRichiamare.dati ? 'attenzione' : 'ok'} href={link('agenda')} />
         <Kpi etichetta="Bilanci di salute da programmare" valore={bilanci.dati?.length ?? '…'}
              nota={bilanciInRitardo ? `${bilanciInRitardo} in ritardo` : 'Prossimi 60 giorni'}
              tono={bilanciInRitardo ? 'attenzione' : 'neutro'} />

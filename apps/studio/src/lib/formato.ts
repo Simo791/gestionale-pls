@@ -112,4 +112,4 @@ export const PRIORITA: Record<PrioritaPrescrizione, string> = {
 export const etichettaTabella = (t: string | null) => (t ? (TABELLE[t] ?? t) : '—');
 
 export const etichettaRuolo = (r: string) =>
-  ({ pediatra: 'Pediatra', segreteria: 'Segreteria', sostituto: 'Sostituto', tutore: 'Genitore', nessuno: 'Sistema' })[r] ?? r;
+  ({ pediatra: 'Pediatra', segreteria: 'Segreteria', sostituto: 'Sostituto', allergologo: 'Allergologo pediatra', tutore: 'Genitore', nessuno: 'Sistema' })[r] ?? r;

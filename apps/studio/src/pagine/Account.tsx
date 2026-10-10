@@ -1,5 +1,7 @@
 import type { ClaimsApp, Pediatra, Studio } from '@pls/shared';
 import { useEffect, useState, type FormEvent } from 'react';
+import GestioneAllergologia from '../componenti/allergo/GestioneAllergologia';
+import GestioneModelli from '../componenti/GestioneModelli';
 import GestioneStaff from '../componenti/GestioneStaff';
 import ImportaCatalogo from '../componenti/ImportaCatalogo';
 import { Bottone, Caricamento, Errore, Pannello } from '../componenti/ui';
@@ -173,7 +175,11 @@ export default function Account({ claims }: { claims: ClaimsApp }) {
         </form>
       </Pannello>
 
+      {(claims.app_ruolo === 'pediatra' || claims.app_ruolo === 'sostituto') && <GestioneModelli claims={claims} />}
+
       <GestioneStaff claims={claims} />
+
+      {claims.app_admin && <GestioneAllergologia claims={claims} />}
 
       {modificabile && (
         <div id="catalogo-prestazioni">

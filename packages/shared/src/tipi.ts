@@ -7,7 +7,7 @@ export type PseudoId = string & { readonly __brand: 'PseudoId' };
 export type ISODate = string;      // '2026-10-01'
 export type ISODateTime = string;  // '2026-10-01T09:30:00Z'
 
-export type RuoloApp = 'pediatra' | 'segreteria' | 'sostituto' | 'tutore' | 'nessuno';
+export type RuoloApp = 'pediatra' | 'segreteria' | 'sostituto' | 'allergologo' | 'tutore' | 'nessuno';
 export type Sesso = 'M' | 'F';
 
 // ---------- schema anagrafica ----------
@@ -141,6 +141,7 @@ export interface Visita {
   pa_diastolica: number | null;
   indicazioni_genitori: string | null;
   prossimo_controllo: ISODate | null;
+  accompagnatori: string[];
 }
 
 export type TipoVisita = 'ambulatoriale' | 'urgenza' | 'bilancio_salute' | 'controllo' | 'domiciliare';
@@ -363,9 +364,12 @@ export interface Prescrizione {
 export interface MembroStudio {
   utente_id: UUID;
   studio_id: UUID;
-  ruolo: 'pediatra' | 'segreteria' | 'sostituto';
+  ruolo: 'pediatra' | 'segreteria' | 'sostituto' | 'allergologo';
   attivo: boolean;
   amministratore: boolean;
+  /** Accettato dall'amministratore nel modulo Allergologia. */
+  allergologia?: boolean;
+  allergologia_abilitato_il?: ISODateTime | null;
   nome: string | null;
   cognome: string | null;
   email: string | null;
@@ -402,4 +406,47 @@ export interface VoceStorico {
   dopo: Record<string, unknown>;
   autore: UUID | null;
   avvenuto_il: ISODateTime;
+}
+
+export type CampoModello = 'anamnesi' | 'esame_obiettivo' | 'terapia' | 'indicazioni';
+
+export interface ModelloTesto {
+  id: UUID;
+  studio_id: UUID;
+  autore: UUID;
+  campo: CampoModello;
+  patologia: string;
+  nome: string;
+  testo: string;
+}
+
+export interface Diagnosi {
+  codice: string;
+  descrizione: string;
+  sinonimi: string[];
+  area: string;
+}
+
+export interface Certificato {
+  id: UUID;
+  pseudo_id: UUID;
+  visita_id: UUID | null;
+  tipo: 'dieta_speciale' | 'dieta_esclusione' | 'generico';
+  data: ISODate;
+  valido_fino: ISODate | null;
+  contenuto: Record<string, unknown>;
+  creato_il: ISODateTime;
+}
+
+export interface Richiamo {
+  id: UUID;
+  studio_id: UUID;
+  paziente_id: UUID;
+  appuntamento_id: UUID | null;
+  tipo_visita: TipoAppuntamento;
+  motivo: string | null;
+  ricontattare_dal: ISODate;
+  stato: 'aperto' | 'fissato' | 'chiuso';
+  creato_il: ISODateTime;
+  chiuso_il: ISODateTime | null;
 }

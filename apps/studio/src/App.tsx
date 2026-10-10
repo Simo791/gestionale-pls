@@ -1,4 +1,4 @@
-import { isStaff, richiedeMfa, type ClaimsApp } from '@pls/shared';
+import { richiedeMfa, usaAppStudio, type ClaimsApp } from '@pls/shared';
 import Layout from './componenti/Layout';
 import { q, useDati } from './lib/dati';
 import { useRotta } from './lib/rotta';
@@ -7,11 +7,13 @@ import { supabase } from './lib/supabase';
 import Accesso from './pagine/Accesso';
 import Account from './pagine/Account';
 import Agenda from './pagine/Agenda';
+import Allergologia from './pagine/Allergologia';
 import Assistiti from './pagine/Assistiti';
 import Consensi from './pagine/Consensi';
 import Cruscotto from './pagine/Cruscotto';
 import Patologie from './pagine/Patologie';
 import Registro from './pagine/Registro';
+import SchedaAllergologica from './pagine/SchedaAllergologica';
 import SchedaPaziente from './pagine/SchedaPaziente';
 import SecondoFattore from './pagine/SecondoFattore';
 
@@ -22,7 +24,7 @@ export default function App() {
   if (caricamento) return <p className="p-6 text-slate-500">Caricamento…</p>;
   if (!sessione || !claims) return <Accesso titolo="Gestionale PLS · Studio" creaNuoviUtenti={false} />;
 
-  if (!isStaff(claims.app_ruolo)) {
+  if (!usaAppStudio(claims.app_ruolo)) {
     return (
       <main className="mx-auto max-w-sm px-4 py-16 text-center">
         <p className="mb-4">Questo account non è abilitato all'app dello studio.</p>
@@ -43,8 +45,16 @@ function Applicazione({ claims }: { claims: ClaimsApp }) {
     [],
   );
 
+  // L'allergologo vede solo il modulo Allergologia (e il proprio account).
+  const sezione = claims.app_ruolo === 'allergologo' && rotta.sezione !== 'account' ? 'allergologia' : rotta.sezione;
+
   let pagina;
-  switch (rotta.sezione) {
+  switch (sezione) {
+    case 'allergologia':
+      pagina = rotta.sezione === 'allergologia' && rotta.id && claims.app_allergologia
+        ? <SchedaAllergologica key={rotta.id} id={rotta.id} claims={claims} />
+        : <Allergologia claims={claims} />;
+      break;
     case 'agenda':
       pagina = <Agenda claims={claims} />;
       break;

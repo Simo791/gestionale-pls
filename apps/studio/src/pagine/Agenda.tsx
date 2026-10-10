@@ -1,5 +1,7 @@
-import type { Appuntamento, ClaimsApp, Paziente, StatoAppuntamento } from '@pls/shared';
+import type { Appuntamento, ClaimsApp, Paziente, Richiamo, StatoAppuntamento } from '@pls/shared';
+import Finestra from '../componenti/Finestra';
 import NuovoAppuntamento from '../componenti/NuovoAppuntamento';
+import { ElencoRichiami, RifiutoAppuntamento } from '../componenti/Richiami';
 import { useState } from 'react';
 import { DocumentoStampa, TabellaStampa, useStampa } from '../componenti/Stampa';
 import { useIntestazione } from '../lib/intestazione';
@@ -29,6 +31,9 @@ const piuGiorni = (d: Date, n: number) => {
 /** Agenda settimanale: scegli il giorno, gestisci conferme ed esiti degli appuntamenti. */
 export default function Agenda({ claims }: { claims: ClaimsApp }) {
   const [nuovo, setNuovo] = useState(false);
+  const [rifiuto, setRifiuto] = useState<AppConPaziente | null>(null);
+  const [daRichiamo, setDaRichiamo] = useState<Richiamo | null>(null);
+  const [versioneRichiami, setVersioneRichiami] = useState(0);
   const [giorno, setGiorno] = useState(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -74,8 +79,12 @@ export default function Agenda({ claims }: { claims: ClaimsApp }) {
     setErrore(null);
     const { error } = await supabase.schema('anagrafica').from('appuntamenti').update({ stato }).eq('id', id);
     setInCorso(null);
-    if (error) setErrore(`Aggiornamento non riuscito: ${error.message}`);
-    else settimana.ricarica();
+    if (error) {
+      setErrore(`Aggiornamento non riuscito: ${error.message}`);
+      return false;
+    }
+    settimana.ricarica();
+    return true;
   }
 
   const adesso = Date.now();
@@ -118,10 +127,22 @@ export default function Agenda({ claims }: { claims: ClaimsApp }) {
 
       {nuovo && (
         <NuovoAppuntamento
+          key={daRichiamo?.id ?? 'nuovo'}
           claims={claims}
           giornoIniziale={isoGiorno(giorno)}
-          onAnnulla={() => setNuovo(false)}
-          onCreato={() => { setNuovo(false); settimana.ricarica(); }}
+          pazienteIniziale={daRichiamo?.paziente_id}
+          tipoIniziale={daRichiamo?.tipo_visita}
+          onAnnulla={() => { setNuovo(false); setDaRichiamo(null); }}
+          onCreato={() => {
+            setNuovo(false);
+            settimana.ricarica();
+            if (daRichiamo) {
+              void supabase.schema('anagrafica').from('richiami')
+                .update({ stato: 'fissato', chiuso_il: new Date().toISOString() }).eq('id', daRichiamo.id)
+                .then(() => setVersioneRichiami((v) => v + 1));
+              setDaRichiamo(null);
+            }
+          }}
         />
       )}
 
@@ -192,17 +213,20 @@ export default function Agenda({ claims }: { claims: ClaimsApp }) {
                     {a.stato === 'richiesto' && (
                       <>
                         <Bottone variante="primario" disabled={occupato} onClick={() => void cambiaStato(a.id, 'confermato')}>Conferma</Bottone>
-                        <Bottone variante="pericolo" disabled={occupato} onClick={() => void cambiaStato(a.id, 'annullato')}>Rifiuta</Bottone>
+                        <Bottone variante="pericolo" disabled={occupato} onClick={() => setRifiuto(a)}>Rifiuta / sposta</Bottone>
                       </>
                     )}
                     {a.stato === 'confermato' && passato && (
                       <>
                         <Bottone variante="primario" disabled={occupato} onClick={() => void cambiaStato(a.id, 'svolto')}>Svolto</Bottone>
-                        <Bottone disabled={occupato} onClick={() => void cambiaStato(a.id, 'non_presentato')}>Non presentato</Bottone>
+                        <Bottone disabled={occupato} onClick={() => void cambiaStato(a.id, 'non_presentato').then((ok) => ok && setRifiuto({ ...a, stato: 'non_presentato' }))}>Non presentato</Bottone>
                       </>
                     )}
+                    {a.stato === 'non_presentato' && (
+                      <Bottone variante="primario" onClick={() => setRifiuto(a)}>Nuovo appuntamento</Bottone>
+                    )}
                     {a.stato === 'confermato' && !passato && (
-                      <Bottone variante="pericolo" disabled={occupato} onClick={() => void cambiaStato(a.id, 'annullato')}>Annulla</Bottone>
+                      <Bottone variante="pericolo" disabled={occupato} onClick={() => setRifiuto(a)}>Annulla / sposta</Bottone>
                     )}
                   </div>
                 </li>
@@ -211,6 +235,18 @@ export default function Agenda({ claims }: { claims: ClaimsApp }) {
           </ul>
         )}
       </Pannello>
+
+      <Pannello titolo="Da ricontattare" sottotitolo="Genitori da richiamare per fissare un appuntamento">
+        <ElencoRichiami aggiorna={versioneRichiami}
+                        onFissa={(r) => { setDaRichiamo(r); setNuovo(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+      </Pannello>
+
+      {rifiuto && (
+        <Finestra titolo={rifiuto.stato === 'non_presentato' ? 'Non presentato: nuovo appuntamento' : 'Il genitore non conferma l\'appuntamento'} onChiudi={() => setRifiuto(null)}>
+          <RifiutoAppuntamento a={rifiuto} nome={rifiuto.pazienti ? `${rifiuto.pazienti.cognome} ${rifiuto.pazienti.nome}` : ''}
+                               onFatto={() => { setRifiuto(null); settimana.ricarica(); setVersioneRichiami((v) => v + 1); }} />
+        </Finestra>
+      )}
     </div>
   );
 }

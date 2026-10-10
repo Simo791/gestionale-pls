@@ -22,6 +22,7 @@ from (values
   ('a0000000-0000-4000-8000-000000000002'::uuid, 'segreteria@example.com'),
   ('a0000000-0000-4000-8000-000000000003'::uuid, 'pediatra.altrostudio@example.com'),
   ('a0000000-0000-4000-8000-000000000004'::uuid, 'sostituto@example.com'),
+  ('a0000000-0000-4000-8000-000000000005'::uuid, 'allergologa@example.com'),
   ('b0000000-0000-4000-8000-000000000001'::uuid, 'mamma.bianchi@example.com'),
   ('b0000000-0000-4000-8000-000000000002'::uuid, 'papa.bianchi@example.com')
 ) as u(id, email);
@@ -157,3 +158,85 @@ update anagrafica.membri_studio set nome = 'Marco', cognome = 'Gialli', email = 
  where utente_id = 'a0000000-0000-4000-8000-000000000004';
 update anagrafica.membri_studio m set nome = p.nome, cognome = p.cognome, email = p.email
   from anagrafica.pediatri p where p.id = m.utente_id;
+
+-- Modulo Allergologia: attivo nello studio demo, con un'allergologa abilitata e
+-- due pazienti inventati (anagrafica separata dagli assistiti del pediatra).
+update anagrafica.studi set allergologia_attiva = true, allergologia_attivata_il = now()
+ where id = 'c0000000-0000-4000-8000-000000000001';
+insert into anagrafica.membri_studio (utente_id, studio_id, ruolo, nome, cognome, email, allergologia, allergologia_abilitato_il)
+values ('a0000000-0000-4000-8000-000000000005', 'c0000000-0000-4000-8000-000000000001', 'allergologo',
+        'Elena', 'Neri', 'allergologa@example.com', true, now());
+
+insert into anagrafica.allergo_pazienti (id, studio_id, nome, cognome, codice_fiscale_cifrato, codice_fiscale_impronta,
+  data_nascita, sesso, genitore_nome, genitore_telefono, pediatra_curante, inviato_da, creato_da) values
+  ('e0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'Tommaso', 'Demo',
+   anagrafica.cifra_cf('DMOTMS17H05X000E'), anagrafica.impronta_cf('DMOTMS17H05X000E'), current_date - interval '9 years 3 months',
+   'M', 'Laura Demo', '0000 222222', 'Dott. Esempio', 'Pediatra di libera scelta', 'a0000000-0000-4000-8000-000000000005'),
+  ('e0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001', 'Alice', 'Prova',
+   anagrafica.cifra_cf('PRVLCA22M50X000F'), anagrafica.impronta_cf('PRVLCA22M50X000F'), current_date - interval '3 years 2 months',
+   'F', 'Paolo Prova', '0000 333333', 'Dott.ssa Esempio', 'Pronto soccorso pediatrico', 'a0000000-0000-4000-8000-000000000005');
+
+do $$
+declare
+  t uuid := (select pseudo_id from pseudonimi.allergo_mappa where paziente_id = 'e0000000-0000-4000-8000-000000000001');
+  a uuid := (select pseudo_id from pseudonimi.allergo_mappa where paziente_id = 'e0000000-0000-4000-8000-000000000002');
+begin
+  update clinica.allergo_cartelle set familiarita = '{"asma: madre","rinite: padre"}', fumo_passivo = false,
+    animali = 'Gatto in casa', anamnesi_personale = 'Dermatite atopica nel primo anno di vita.' where pseudo_id = t;
+  insert into clinica.allergo_visite (pseudo_id, medico_id, data, tipo, motivo, peso_kg, altezza_cm, conclusioni, piano, prossimo_controllo)
+  values (t, 'a0000000-0000-4000-8000-000000000005', now() - interval '5 months', 'prima_visita',
+          'Tosse notturna e sibili dopo lo sport', 31.5, 134, 'Asma allergico con sensibilizzazione ad acari',
+          'Corticosteroide inalatorio a basse dosi, spirometria al controllo', current_date + 14);
+  insert into clinica.allergo_diagnosi (pseudo_id, area, descrizione, data_diagnosi, gravita) values
+    (t, 'asma', 'Asma allergico', current_date - 150, 'Lieve persistente'),
+    (t, 'rinite', 'Rinite allergica persistente da acari', current_date - 150, 'Moderata-grave');
+  insert into clinica.allergo_test (pseudo_id, data, tipo, allergene, valore, unita, esito) values
+    (t, current_date - 150, 'prick', 'Istamina (controllo +)', 6, 'mm', 'positivo'),
+    (t, current_date - 150, 'prick', 'Soluzione salina (controllo −)', 0, 'mm', 'negativo'),
+    (t, current_date - 150, 'prick', 'Dermatophagoides pteronyssinus', 8, 'mm', 'positivo'),
+    (t, current_date - 150, 'prick', 'Dermatophagoides farinae', 7, 'mm', 'positivo'),
+    (t, current_date - 150, 'prick', 'Gatto (epitelio)', 2, 'mm', 'negativo');
+  insert into clinica.allergo_spirometrie (pseudo_id, data, fev1_l, fev1_pct, fvc_l, fvc_pct, fev1_fvc, fev1_post_l, feno_ppb)
+  values (t, current_date - 150, 1.62, 82, 2.05, 95, 79.0, 1.85, 38);
+  insert into clinica.allergo_punteggi (pseudo_id, data, scala, punteggio, dettagli) values
+    (t, current_date - 150, 'c_act', 17, '{"voci":[2,2,2,2,3,3,3]}'),
+    (t, current_date - 60, 'c_act', 23, '{"voci":[3,3,3,3,4,4,3]}');
+  insert into clinica.allergo_terapie (pseudo_id, farmaco, classe, posologia, dal) values
+    (t, 'Fluticasone propionato 50 mcg spray predosato con distanziatore', 'ics', '2 puff × 2/die', current_date - 150),
+    (t, 'Salbutamolo 100 mcg spray con distanziatore', 'saba', 'Al bisogno, secondo piano d''azione', current_date - 150);
+
+  insert into clinica.allergo_visite (pseudo_id, medico_id, data, tipo, motivo, peso_kg, conclusioni, piano, prossimo_controllo)
+  values (a, 'a0000000-0000-4000-8000-000000000005', now() - interval '20 days', 'urgenza',
+          'Orticaria generalizzata e vomito dopo assunzione di anacardi', 14.2,
+          'Anafilassi da frutta a guscio (anacardo)', 'Dieta di esclusione, autoiniettore 0,15 mg × 2, piano d''azione',
+          current_date + 70);
+  insert into clinica.allergo_diagnosi (pseudo_id, area, descrizione, data_diagnosi, gravita) values
+    (a, 'allergia_alimentare', 'Allergia IgE-mediata ad anacardo e pistacchio', current_date - 20, null),
+    (a, 'anafilassi', 'Anafilassi da alimento', current_date - 20, null);
+  insert into clinica.allergo_reazioni (pseudo_id, data, causa_categoria, causa, cute_mucose, gastrointestinale,
+    respiratorio, anafilassi, adrenalina, dosi_adrenalina, pronto_soccorso, descrizione)
+  values (a, current_date - 21, 'alimento', 'Anacardo (biscotto)', true, true, true, true, true, 1, true,
+          'Orticaria diffusa, vomito ripetuto, tosse; adrenalina IM in PS con risoluzione.');
+  insert into clinica.allergo_test (pseudo_id, data, tipo, allergene, valore, unita, esito) values
+    (a, current_date - 10, 'ige_componenti', 'Ana o 3 (anacardo, 2S albumina)', 4.8, 'kUA/L', 'positivo'),
+    (a, current_date - 10, 'ige_specifiche', 'Pistacchio', 2.1, 'kUA/L', 'positivo');
+  insert into clinica.allergo_autoiniettori (pseudo_id, dispositivo, dose_mg, numero, peso_kg, data_prescrizione, scadenza)
+  values (a, 'Autoiniettore adrenalina', 0.15, 2, 14.2, current_date - 20, current_date + 45);
+end;
+$$;
+
+-- Allergologia (1900): anamnesi strutturata e dati per il referto (inventati)
+update anagrafica.allergo_pazienti set luogo_nascita = 'Città Demo', residenza = 'Città Demo, via degli Esempi 3'
+ where id in ('e0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000002');
+update clinica.allergo_cartelle c set
+  anamnesi_familiare = 'Madre: asma allergico. Padre: rinite allergica.',
+  anamnesi_fisiologica = 'Primogenito nato a termine da gravidanza normodecorsa, parto spontaneo. PN 3.400 kg. LM esclusivo per 6 mesi. Divezzamento al 6° mese senza problemi.',
+  anamnesi_remota = 'Bronchiolite a 4 mesi senza necessità di ossigeno. Dermatite atopica nel primo anno di vita.',
+  abitazione = 'In città, apparentemente asciutta', fumo_dettaglio = 'NO', farmaci = 'Ben tollerati i farmaci finora assunti',
+  alimentazione = 'Non reazioni avverse ad alimenti', sport = 'Calcio, con tosse da sforzo'
+from pseudonimi.allergo_mappa m
+where m.pseudo_id = c.pseudo_id and m.paziente_id = 'e0000000-0000-4000-8000-000000000001';
+update clinica.allergo_visite v set anamnesi = 'Da circa un anno tosse notturna e sibili dopo lo sport, starnutazioni e prurito nasale al risveglio.',
+  test_eseguiti = 'SPT: D. pteronyssinus 8 mm, D. farinae 7 mm, epitelio di gatto negativo, istamina 6 mm.'
+from pseudonimi.allergo_mappa m
+where m.pseudo_id = v.pseudo_id and m.paziente_id = 'e0000000-0000-4000-8000-000000000001';

@@ -1,8 +1,8 @@
-import { etaLeggibile, type Appuntamento, type ConsensoIncompleto, type Paziente, type TipoRelazione } from '@pls/shared';
+import { etaEstesa, type Appuntamento, type ConsensoIncompleto, type Paziente, type TipoRelazione } from '@pls/shared';
 import { useState } from 'react';
 import { Badge, Caricamento, Errore, Pannello, Vuoto } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
-import { ETICHETTA_TIPO, fmtData, oggiIso } from '../lib/formato';
+import { ETICHETTA_TIPO, fmtData, fmtGiornoIso, oggiIso } from '../lib/formato';
 import { link } from '../lib/rotta';
 import { supabase } from '../lib/supabase';
 
@@ -81,7 +81,7 @@ export default function Assistiti() {
               <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-2 font-medium">Bambino</th>
-                  <th className="px-4 py-2 font-medium">Età</th>
+                  <th className="px-4 py-2 font-medium">Nato/a il · età</th>
                   <th className="hidden px-4 py-2 font-medium md:table-cell">Genitori</th>
                   <th className="px-4 py-2 font-medium">Consensi</th>
                   <th className="px-4 py-2 font-medium">Prossimo appuntamento</th>
@@ -98,7 +98,10 @@ export default function Assistiti() {
                         </a>
                         <span className="ml-2 text-xs text-slate-500">{p.sesso}</span>
                       </td>
-                      <td className="px-4 py-2 text-slate-600">{etaLeggibile(p.data_nascita, oggi)}</td>
+                      <td className="px-4 py-2">
+                        <span className="block text-base font-medium tabular-nums text-slate-900">{fmtGiornoIso(p.data_nascita)}</span>
+                        <span className="block text-sm text-slate-700">{etaEstesa(p.data_nascita, oggi)}</span>
+                      </td>
                       <td className="hidden px-4 py-2 text-slate-600 md:table-cell">
                         {p.relazioni_tutela.map((r) => r.tutori ? `${r.tutori.nome} ${r.tutori.cognome}` : '').filter(Boolean).join(', ') || '—'}
                       </td>

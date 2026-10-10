@@ -9,9 +9,11 @@ export interface ClaimsApp {
   app_studio_id?: UUID;
   /** Amministratore dello studio (gestisce staff e sostituzioni). */
   app_admin: boolean;
+  /** Vede la sezione Allergologia (modulo attivo + amministratore o allergologo accettato). */
+  app_allergologia: boolean;
 }
 
-const RUOLI: readonly RuoloApp[] = ['pediatra', 'segreteria', 'sostituto', 'tutore', 'nessuno'];
+const RUOLI: readonly RuoloApp[] = ['pediatra', 'segreteria', 'sostituto', 'allergologo', 'tutore', 'nessuno'];
 
 /**
  * Legge i claim dal token di accesso SENZA verificarne la firma.
@@ -36,7 +38,8 @@ export function leggiClaims(accessToken: string): ClaimsApp | null {
       aal: dati.aal === 'aal2' ? 'aal2' : 'aal1',
       app_ruolo: ruolo,
       app_studio_id: typeof dati.app_studio_id === 'string' ? dati.app_studio_id : undefined,
-      app_admin: dati.app_admin === true && ruolo === 'pediatra',
+      app_admin: dati.app_admin === true && (isStaff(ruolo) || ruolo === 'allergologo'),
+      app_allergologia: dati.app_allergologia === true && ruolo !== 'tutore' && ruolo !== 'segreteria',
     };
   } catch {
     return null;
@@ -46,8 +49,11 @@ export function leggiClaims(accessToken: string): ClaimsApp | null {
 export const isStaff = (ruolo: RuoloApp): boolean =>
   ruolo === 'pediatra' || ruolo === 'segreteria' || ruolo === 'sostituto';
 
+/** Chi può usare l'app dello studio: lo staff e l'allergologo (solo modulo Allergologia). */
+export const usaAppStudio = (ruolo: RuoloApp): boolean => isStaff(ruolo) || ruolo === 'allergologo';
+
 /**
  * Tutto lo staff usa il secondo fattore (TOTP). Per i dati clinici è il database
  * a imporlo (aal2 nelle policy); qui lo chiediamo anche alla segreteria.
  */
-export const richiedeMfa = (ruolo: RuoloApp): boolean => isStaff(ruolo);
+export const richiedeMfa = (ruolo: RuoloApp): boolean => usaAppStudio(ruolo);

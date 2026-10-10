@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { q, useDati } from '../lib/dati';
 import { fmtGiornoIso, oggiIso } from '../lib/formato';
 import { supabase } from '../lib/supabase';
+import type { AllergeneCertificato } from './CertificatoDieta';
 import { Badge, Bottone, Caricamento, Errore, Vuoto, type Tono } from './ui';
 
 export const CATEGORIE: Record<CategoriaAllergene, string> = {
@@ -31,7 +32,12 @@ export const FONTI_ALLERGIE =
   'Inalanti: Fondazione Salus Pueri. Test diagnostici: Ospedale Pediatrico Bambino Gesù.';
 
 /** Allergie strutturate del bambino + catalogo dei test allergologici disponibili. */
-export default function Allergie({ pseudoId, legacy }: { pseudoId: string; legacy: string[] }) {
+export default function Allergie({ pseudoId, legacy, onDocumento }: {
+  pseudoId: string;
+  legacy: string[];
+  /** Apre il certificato per la mensa o la dieta di esclusione con gli allergeni alimentari indicati. */
+  onDocumento?: (tipo: 'dieta_speciale' | 'dieta_esclusione', allergie: AllergeneCertificato[], scelte: string[]) => void;
+}) {
   const [nuova, setNuova] = useState(false);
   const [mostraTest, setMostraTest] = useState(false);
   const [form, setForm] = useState({
@@ -79,6 +85,12 @@ export default function Allergie({ pseudoId, legacy }: { pseudoId: string; legac
   if (allergeni.errore || allergie.errore) return <Errore messaggio={allergeni.errore ?? allergie.errore ?? ''} />;
   if (allergeni.caricamento || allergie.caricamento) return <Caricamento />;
 
+  // Allergie alimentari ancora attive: base per certificato mensa e dieta di esclusione
+  const alimentari: AllergeneCertificato[] = (allergie.dati ?? [])
+    .filter((a) => a.stato !== 'risolta' && allergeni.dati?.find((x) => x.codice === a.allergene)?.categoria === 'alimento')
+    .map((a) => ({ codice: a.allergene, nome: nomeAllergene(a.allergene), dettaglio: a.dettaglio, gravita: a.gravita }));
+  const apri = (tipo: 'dieta_speciale' | 'dieta_esclusione', scelte: string[]) => onDocumento?.(tipo, alimentari, scelte);
+
   const perCategoria = (Object.keys(CATEGORIE) as CategoriaAllergene[]).map((cat) => ({
     cat,
     voci: (allergeni.dati ?? []).filter((a) => a.categoria === cat),
@@ -104,6 +116,9 @@ export default function Allergie({ pseudoId, legacy }: { pseudoId: string; legac
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tono={GRAVITA[a.gravita].tono}>{GRAVITA[a.gravita].testo}</Badge>
+                {onDocumento && alimentari.some((x) => x.codice === a.allergene) && (
+                  <button onClick={() => apri('dieta_speciale', [a.allergene])} className="text-xs text-teal-700 underline">Certificato mensa</button>
+                )}
                 <select value={a.stato} onChange={(e) => void aggiornaStato(a, e.target.value as AllergiaPaziente['stato'])}
                         aria-label="Stato dell'allergia" className="rounded-lg border border-slate-300 px-2 py-1 text-xs">
                   {(Object.keys(STATI) as AllergiaPaziente['stato'][]).map((s) => <option key={s} value={s}>{STATI[s]}</option>)}
@@ -120,6 +135,12 @@ export default function Allergie({ pseudoId, legacy }: { pseudoId: string; legac
       <div className="flex flex-wrap gap-2">
         <Bottone variante="primario" onClick={() => setNuova((v) => !v)}>+ Aggiungi allergia</Bottone>
         <Bottone onClick={() => setMostraTest((v) => !v)}>{mostraTest ? 'Nascondi' : 'Mostra'} test allergologici</Bottone>
+        {onDocumento && alimentari.length > 0 && (
+          <>
+            <Bottone onClick={() => apri('dieta_speciale', alimentari.map((x) => x.codice))}>Certificato scuola / mensa</Bottone>
+            <Bottone onClick={() => apri('dieta_esclusione', alimentari.map((x) => x.codice))}>Dieta di esclusione</Bottone>
+          </>
+        )}
       </div>
 
       {nuova && (
