@@ -47,10 +47,10 @@ export function datiDelGiorno(giorno: string, d: DatiGiornata) {
 export type StileTabella = 'classico' | 'colori';
 
 function Tabella({ stile, intestazioni, righe, allinea }: { stile: StileTabella; intestazioni: string[]; righe: ReactNode[][]; allinea?: ('l' | 'r')[] }) {
-  const cella = stile === 'classico' ? 'border border-black px-2 py-0.5' : 'border-b border-slate-200 px-2 py-1';
-  const testa = stile === 'classico' ? 'border border-black bg-gray-100 px-2 py-0.5 text-left' : 'border-b-2 border-slate-300 px-2 py-1 text-left text-[9pt] uppercase tracking-wide text-slate-600';
+  const cella = stile === 'classico' ? 'border border-black px-2 py-0.5' : 'border border-slate-300 px-2 py-0.5';
+  const testa = stile === 'classico' ? 'border border-black bg-gray-100 px-2 py-0.5 text-left' : 'border border-slate-300 bg-gray-100 px-2 py-0.5 text-left text-[9pt] font-semibold';
   return (
-    <table className={`w-full border-collapse text-[10pt] ${stile === 'colori' ? 'rounded-lg bg-white/80' : ''}`} style={{ breakInside: 'avoid' }}>
+    <table className="w-full border-collapse text-[10pt]" style={{ breakInside: 'avoid' }}>
       <thead><tr>{intestazioni.map((h, i) => <th key={h} className={`${testa} ${allinea?.[i] === 'r' ? 'text-right' : ''}`}>{h}</th>)}</tr></thead>
       <tbody>
         {righe.map((r, i) => (
@@ -61,14 +61,42 @@ function Tabella({ stile, intestazioni, righe, allinea }: { stile: StileTabella;
   );
 }
 
+/** Prick test: titolo per metodica, allergeni affiancati su 4 colonne (allergene · mm). */
 export function TabellaPrick({ righe, stile }: { righe: RigaAllergo[]; stile: StileTabella }) {
+  const COLONNE = 4;
+  const gruppi = (['prick', 'prick_by_prick'] as const).map((t) => [t, righe.filter((r) => r.tipo === t)] as const).filter(([, r]) => r.length);
+  const cella = stile === 'classico' ? 'border border-black px-1.5 py-0.5' : 'border border-slate-300 px-1.5 py-0.5';
+  const testa = `${cella} bg-gray-100 text-left text-[9pt] font-semibold`;
   return (
-    <Tabella stile={stile} intestazioni={['Allergene', 'Metodica', 'Pomfo (mm)']} allinea={['l', 'l', 'r']}
-      righe={righe.map((r) => [
-        controllo(r) ? <i>{String(r.allergene)}</i> : String(r.allergene),
-        TIPO_TEST[String(r.tipo)] ?? String(r.tipo),
-        r.valore == null ? '—' : n(r.valore, 1),
-      ])} />
+    <div className="space-y-2">
+      {gruppi.map(([tipo, elenco]) => {
+        const file: RigaAllergo[][] = [];
+        for (let i = 0; i < elenco.length; i += COLONNE) file.push(elenco.slice(i, i + COLONNE));
+        return (
+          <div key={tipo} style={{ breakInside: 'avoid' }}>
+            <p className="mb-0.5 font-semibold">{TIPO_TEST[tipo]}</p>
+            <table className="w-full table-fixed border-collapse text-[9.5pt]">
+              <colgroup>{Array.from({ length: COLONNE }, (_, i) => [<col key={`a${i}`} />, <col key={`m${i}`} style={{ width: '9%' }} />])}</colgroup>
+              <thead><tr>{Array.from({ length: COLONNE }, (_, i) => [
+                <th key={`a${i}`} className={testa}>Allergene</th>, <th key={`m${i}`} className={`${testa} text-right`}>mm</th>])}</tr></thead>
+              <tbody>
+                {file.map((fila, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: COLONNE }, (_, j) => {
+                      const r = fila[j];
+                      return [
+                        <td key={`a${j}`} className={`${cella} leading-tight`}>{r ? (controllo(r) ? <i>{String(r.allergene)}</i> : String(r.allergene)) : ''}</td>,
+                        <td key={`m${j}`} className={`${cella} text-right tabular-nums`}>{r ? (r.valore == null ? '—' : n(r.valore, 1)) : ''}</td>,
+                      ];
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
