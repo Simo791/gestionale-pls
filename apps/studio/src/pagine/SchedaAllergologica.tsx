@@ -95,7 +95,8 @@ export default function SchedaAllergologica({ id, claims }: { id: string; claims
                         visita={v} anamnesi={anamnesi} prima={prima}
                         dati={{ test: t?.test ?? [], spirometrie: t?.spirometrie ?? [], punteggi: t?.punteggi ?? [] }} />
       : <RefertoVisita impostazioni={impostazioni.dati ?? null} studio={studio.dati} paziente={p} codiceFiscale={codice}
-                       visita={v} anamnesi={anamnesi} prima={prima} />);
+                       visita={v} anamnesi={anamnesi} prima={prima}
+                       dati={{ test: t?.test ?? [], spirometrie: t?.spirometrie ?? [], punteggi: t?.punteggi ?? [] }} />);
   }
 
   const terapieInCorso = (t?.terapie ?? []).filter((x) => !x.al || String(x.al) >= oggiIso());

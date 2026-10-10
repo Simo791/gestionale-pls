@@ -1,19 +1,22 @@
-import { etaEstesa, livelloFeno, type AllergoPaziente, type RigaAllergo, type Studio } from '@pls/shared';
+import { etaEstesa, type AllergoPaziente, type RigaAllergo, type Studio } from '@pls/shared';
 import type { CSSProperties, ReactNode } from 'react';
 import { fmtDataOra, fmtGiornoIso } from '../../lib/formato';
-import { testoTest, type ImpostazioniReferto } from './referto';
-import { MappaCorporea } from './Scorad';
+import type { ImpostazioniReferto } from './referto';
+import { MappaCorporea as Mappa } from './Scorad';
+import { righeMedico } from './stampa';
+import {
+  datiDelGiorno, giornoVisita, SCALE_REFERTO, TabellaAltriTest, TabellaIgE, TabellaPrick, TabellaPunteggi, TabellaSpirometria,
+} from './tabelleReferto';
 
 /**
  * Referto grafico della visita allergologica, pensato per bambini e famiglie:
- * colori tenui per sezione, prick test, IgE, spirometria e punteggi schematizzati.
- * Lo stato (bene / attenzione / alterato) usa sempre colore + etichetta, mai solo il colore.
+ * colori tenui per sezione e icone. I test sono riportati come VALORI (tabelle), senza giudizi
+ * automatici; i grafici compaiono solo dove aiutano la famiglia (andamento nel tempo, zone della pelle).
  */
 
 // Colori di stato (fissi) e colori tenui delle sezioni.
-const STATO = { bene: '#0ca30c', attenzione: '#fab219', alterato: '#ec835a', critico: '#d03b3b', neutro: '#cbd5e1' } as const;
-type Stato = keyof typeof STATO;
-const TINTA: Record<Stato, string> = { bene: '#dcfce7', attenzione: '#fef3c7', alterato: '#ffedd5', critico: '#fee2e2', neutro: '#f1f5f9' };
+// Tinte delle righe del piano di cura scritte dal medico (✅ migliora, ❌ non migliora, ➡ attenzione).
+const TINTA = { bene: '#dcfce7', attenzione: '#fef3c7', critico: '#fee2e2' } as const;
 
 const SEZIONI = {
   anamnesi: { fondo: '#f0f9ff', bordo: '#7dd3fc', inchiostro: '#0369a1' },
@@ -68,12 +71,6 @@ function Riquadro({ s, titolo, icona, children }: { s: Sezione; titolo: string; 
   );
 }
 
-const Etichetta = ({ stato, children }: { stato: Stato; children: ReactNode }) => (
-  <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9pt] font-semibold text-slate-800" style={{ background: TINTA[stato] }}>
-    <span className="inline-block h-2 w-2 rounded-full" style={{ background: STATO[stato] }} />{children}
-  </span>
-);
-
 const num = (v: unknown, d = 1) => Number(v).toLocaleString('it-IT', { maximumFractionDigits: d });
 
 /** Testo con elenchi e righe evidenziate (✅ migliora, ❌ non migliora, ➡ attenzione). */
@@ -105,241 +102,42 @@ function TestoColorato({ testo }: { testo: string | null | undefined }) {
   );
 }
 
-// ---------------------------------------------------------------- prick test
-function GraficoPrick({ righe }: { righe: RigaAllergo[] }) {
-  const istamina = righe.find((r) => /istamina/i.test(String(r.allergene)));
-  const negativo = righe.find((r) => /controllo\s*[-−]|salina|negativo/i.test(String(r.allergene)) && !/istamina/i.test(String(r.allergene)));
-  const allergeni = righe.filter((r) => r !== istamina && r !== negativo)
-    .sort((a, b) => Number(b.valore ?? 0) - Number(a.valore ?? 0));
-  const ordinate = [...allergeni, ...(istamina ? [istamina] : []), ...(negativo ? [negativo] : [])];
-  const neg = Number(negativo?.valore ?? 0);
-  const soglia = neg + 3;
-  const max = Math.max(10, Math.ceil(Math.max(...ordinate.map((r) => Number(r.valore ?? 0)), soglia) + 2));
-  const L = 190, W = 300, H = 20, top = 18;
-  const x = (mm: number) => L + (mm / max) * W;
-  const alt = top + ordinate.length * H + 22;
-  const positivi = allergeni.filter((r) => r.esito === 'positivo');
+// ---------------------------------------------------------------- andamento nel tempo
+/**
+ * Grafico dell'andamento di una misura nelle visite (solo se ci sono almeno due valori):
+ * mostra i valori registrati e le date, senza soglie né giudizi automatici.
+ */
+function Andamento({ titolo, punti, unita, min, max }: { titolo: string; punti: { data: string; valore: number }[]; unita: string; min: number; max: number }) {
+  if (punti.length < 2) return null;
+  const W = 520, H = 120, L = 34, B = 22, T = 14;
+  const x = (i: number) => L + 20 + (i / (punti.length - 1)) * (W - L - 20 - 36);
+  const y = (v: number) => T + (1 - (v - min) / (max - min || 1)) * (H - T - B);
+  const d = punti.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(p.valore)}`).join(' ');
+  const passi = [min, (min + max) / 2, max];
   return (
-    <div>
-      <p className="mb-1 text-[9.5pt] text-slate-700">
-        Diametro del pomfo in millimetri. È <b>positivo</b> se supera di almeno 3 mm il controllo negativo.
-        {positivi.length ? ` Positivi: ${positivi.map((r) => r.allergene).join(', ')}.` : ' Nessun allergene positivo.'}
-      </p>
-      <svg viewBox={`0 0 560 ${alt}`} className="w-full" role="img" aria-label="Grafico del prick test">
-        {Array.from({ length: Math.floor(max / 2) + 1 }, (_, i) => i * 2).map((t) => (
-          <g key={t}>
-            <line x1={x(t)} x2={x(t)} y1={top - 4} y2={alt - 20} stroke="#e2e8f0" strokeWidth={1} />
-            <text x={x(t)} y={alt - 6} fontSize={9} textAnchor="middle" fill="#64748b">{t}</text>
+    <figure className="mt-2 rounded-xl bg-white/80 p-2" style={{ breakInside: 'avoid' }}>
+      <figcaption className="text-[9.5pt] font-semibold text-slate-700">{titolo}</figcaption>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`${titolo}: ${punti.map((p) => `${p.valore}${unita} il ${dataIt(p.data)}`).join(', ')}`}>
+        {passi.map((v) => (
+          <g key={v}>
+            <line x1={L} x2={W - 10} y1={y(v)} y2={y(v)} stroke="#e2e8f0" />
+            <text x={L - 6} y={y(v) + 3} fontSize={9} textAnchor="end" fill="#64748b">{num(v)}</text>
           </g>
         ))}
-        <text x={L + W} y={alt - 6} dx={22} fontSize={9} fill="#64748b">mm</text>
-        {ordinate.map((r, i) => {
-          const v = Number(r.valore ?? 0);
-          const y = top + i * H;
-          const controllo = r === istamina || r === negativo;
-          const pos = r.esito === 'positivo' && !controllo;
-          const colore = r === istamina ? '#3987e5' : r === negativo ? '#94a3b8' : pos ? STATO.alterato : STATO.neutro;
-          return (
-            <g key={String(r.id)}>
-              <text x={L - 8} y={y + 13} fontSize={10} textAnchor="end" fill={controllo ? '#475569' : '#0f172a'} fontStyle={controllo ? 'italic' : 'normal'}>
-                {String(r.allergene).length > 30 ? `${String(r.allergene).slice(0, 29)}…` : String(r.allergene)}
-              </text>
-              {v > 0 && <rect x={L} y={y + 3} width={Math.max(4, x(v) - L)} height={H - 6} rx={4} fill={colore} />}
-              {v > 0 && <circle cx={x(v) - 7} cy={y + H / 2} r={4} fill="#ffffff" opacity={0.85} />}
-              <text x={x(v) + 6} y={y + 13} fontSize={10} fill="#0f172a" fontWeight={pos ? 700 : 400}>
-                {v ? `${num(v)} mm` : '0'}{controllo ? '' : pos ? '  ● positivo' : '  negativo'}
-              </text>
-            </g>
-          );
-        })}
-        <line x1={x(soglia)} x2={x(soglia)} y1={top - 6} y2={alt - 20} stroke={STATO.critico} strokeWidth={1.5} strokeDasharray="4 3" />
-        <text x={x(soglia)} y={10} fontSize={9} textAnchor="middle" fill={STATO.critico}>soglia {num(soglia)} mm</text>
-      </svg>
-      <p className="mt-1 flex flex-wrap gap-3 text-[9pt] text-slate-600">
-        <span><span className="mr-1 inline-block h-2 w-3 rounded" style={{ background: STATO.alterato }} />positivo</span>
-        <span><span className="mr-1 inline-block h-2 w-3 rounded" style={{ background: STATO.neutro }} />negativo</span>
-        <span><span className="mr-1 inline-block h-2 w-3 rounded" style={{ background: '#3987e5' }} />istamina (controllo positivo)</span>
-        <span><span className="mr-1 inline-block h-2 w-3 rounded" style={{ background: '#94a3b8' }} />controllo negativo</span>
-      </p>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- IgE (scala logaritmica, classi)
-const CLASSI_IGE: [number, number, string][] = [[0.1, 0.35, '0'], [0.35, 0.7, '1'], [0.7, 3.5, '2'], [3.5, 17.5, '3'], [17.5, 50, '4'], [50, 100, '5']];
-const BLU = ['#f1f5f9', '#cde2fb', '#a9ccf5', '#86b6ef', '#3987e5', '#1c5cab'];
-function GraficoIgE({ righe }: { righe: RigaAllergo[] }) {
-  const L = 190, W = 330, H = 20, top = 22;
-  const lx = (v: number) => L + ((Math.log10(Math.min(100, Math.max(0.1, v))) + 1) / 3) * W;
-  const alt = top + righe.length * H + 22;
-  return (
-    <div>
-      <p className="mb-1 text-[9.5pt] text-slate-700">IgE specifiche (kUA/L, scala logaritmica). Da 0,35 kUA/L si parla di sensibilizzazione: va sempre letta insieme alla storia clinica.</p>
-      <svg viewBox={`0 0 580 ${alt}`} className="w-full" role="img" aria-label="Grafico delle IgE specifiche">
-        {CLASSI_IGE.map(([a, b, c], i) => (
-          <g key={c}>
-            <rect x={lx(a)} y={top - 4} width={lx(b) - lx(a) - 2} height={righe.length * H + 4} fill={BLU[i]} opacity={0.45} rx={3} />
-            <text x={(lx(a) + lx(b)) / 2} y={12} fontSize={8.5} textAnchor="middle" fill="#475569">classe {c}</text>
+        <path d={d} fill="none" stroke="#0f766e" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+        {punti.map((p, i) => (
+          <g key={p.data + i}>
+            <circle cx={x(i)} cy={y(p.valore)} r={5} fill="#ffffff" stroke="#0f766e" strokeWidth={2.5} />
+            <text x={x(i)} y={y(p.valore) - 9} fontSize={10} textAnchor="middle" fill="#0f172a" fontWeight={700}>{num(p.valore)}{unita}</text>
+            <text x={x(i)} y={H - 6} fontSize={9} textAnchor="middle" fill="#64748b">{dataIt(p.data)}</text>
           </g>
         ))}
-        {[0.1, 0.35, 1, 3.5, 10, 17.5, 50, 100].map((t) => (
-          <text key={t} x={lx(t)} y={alt - 6} fontSize={8.5} textAnchor="middle" fill="#64748b">{num(t, 2)}</text>
-        ))}
-        {righe.map((r, i) => {
-          const v = Number(r.valore ?? 0);
-          const y = top + i * H;
-          const pos = v >= 0.35;
-          return (
-            <g key={String(r.id)}>
-              <text x={L - 8} y={y + 12} fontSize={10} textAnchor="end" fill="#0f172a">{String(r.allergene).slice(0, 32)}</text>
-              <line x1={L} x2={lx(v)} y1={y + 8} y2={y + 8} stroke={pos ? '#1c5cab' : '#94a3b8'} strokeWidth={2} />
-              <circle cx={lx(v)} cy={y + 8} r={5.5} fill={pos ? '#1c5cab' : '#ffffff'} stroke={pos ? '#ffffff' : '#94a3b8'} strokeWidth={2} />
-              <text x={lx(v) + 9} y={y + 12} fontSize={10} fill="#0f172a" fontWeight={pos ? 700 : 400}>{num(v, 2)} {String(r.unita ?? 'kUA/L')}</text>
-            </g>
-          );
-        })}
       </svg>
-    </div>
+    </figure>
   );
 }
 
-// ---------------------------------------------------------------- barre a zone (spirometria, FeNO)
-function BarraZone({ etichetta, valore, unita, min, max, zone, nota }: {
-  etichetta: string; valore: number; unita: string; min: number; max: number;
-  zone: { da: number; a: number; stato: Stato; testo: string }[]; nota?: string;
-}) {
-  const W = 330, L = 0;
-  const x = (v: number) => L + ((Math.min(max, Math.max(min, v)) - min) / (max - min)) * W;
-  const attuale = zone.find((z) => valore >= z.da && valore < z.a) ?? zone[zone.length - 1]!;
-  return (
-    <div className="grid grid-cols-[150px_1fr_auto] items-center gap-3 py-1">
-      <div><p className="font-semibold text-slate-900">{etichetta}</p>{nota && <p className="text-[8.5pt] text-slate-500">{nota}</p>}</div>
-      <svg viewBox="0 0 340 34" className="w-full" role="img" aria-label={`${etichetta}: ${valore}${unita}`}>
-        {zone.map((z) => <rect key={z.da} x={x(z.da)} y={8} width={Math.max(0, x(z.a) - x(z.da) - 2)} height={10} rx={4} fill={TINTA[z.stato]} stroke={STATO[z.stato]} strokeWidth={0.8} />)}
-        <path d={`M${x(valore) - 6},2 L${x(valore) + 6},2 L${x(valore)},10 Z`} fill="#0f172a" />
-        <rect x={x(valore) - 1.5} y={6} width={3} height={14} fill="#0f172a" rx={1} />
-        <text x={x(min)} y={31} fontSize={8.5} fill="#64748b">{min}</text>
-        <text x={x(max)} y={31} fontSize={8.5} fill="#64748b" textAnchor="end">{max}</text>
-      </svg>
-      <div className="text-right">
-        <p className="text-[13pt] font-bold tabular-nums text-slate-900">{num(valore)}{unita}</p>
-        <Etichetta stato={attuale.stato}>{attuale.testo}</Etichetta>
-      </div>
-    </div>
-  );
-}
-
-function Spirometria({ s, etaAnni }: { s: RigaAllergo; etaAnni: number }) {
-  const pct = (z: string) => [{ da: 0, a: 60, stato: 'critico' as Stato, testo: 'ridotto' }, { da: 60, a: 80, stato: 'attenzione' as Stato, testo: 'lievemente ridotto' }, { da: 80, a: 151, stato: 'bene' as Stato, testo: z }];
-  const bambino = etaAnni < 12;
-  const rev = s.reversibilita_pct == null ? null : Number(s.reversibilita_pct);
-  const feno = s.feno_ppb == null ? null : Number(s.feno_ppb);
-  const [f1, f2] = bambino ? [20, 35] : [25, 50];
-  return (
-    <div>
-      {s.fev1_pct != null && <BarraZone etichetta="FEV₁" nota="aria espirata nel 1° secondo, % del previsto" valore={Number(s.fev1_pct)} unita="%" min={0} max={150} zone={pct('nella norma')} />}
-      {s.fvc_pct != null && <BarraZone etichetta="FVC" nota="capacità vitale forzata, % del previsto" valore={Number(s.fvc_pct)} unita="%" min={0} max={150} zone={pct('nella norma')} />}
-      {s.fev1_fvc != null && (
-        <BarraZone etichetta="FEV₁/FVC" nota={bambino ? 'nei bambini di solito > 90%' : 'di norma > 80%'} valore={Number(s.fev1_fvc)} unita="%" min={50} max={100}
-          zone={bambino
-            ? [{ da: 0, a: 80, stato: 'critico', testo: 'ostruzione' }, { da: 80, a: 90, stato: 'attenzione', testo: 'da valutare' }, { da: 90, a: 101, stato: 'bene', testo: 'nella norma' }]
-            : [{ da: 0, a: 70, stato: 'critico', testo: 'ostruzione' }, { da: 70, a: 80, stato: 'attenzione', testo: 'da valutare' }, { da: 80, a: 101, stato: 'bene', testo: 'nella norma' }]} />
-      )}
-      {s.fef2575_pct != null && <BarraZone etichetta="FEF₂₅₋₇₅" nota="piccole vie aeree, % del previsto" valore={Number(s.fef2575_pct)} unita="%" min={0} max={150}
-        zone={[{ da: 0, a: 65, stato: 'attenzione', testo: 'ridotto' }, { da: 65, a: 151, stato: 'bene', testo: 'nella norma' }]} />}
-      {rev != null && s.fev1_l != null && s.fev1_post_l != null && (
-        <div className="mt-2 grid grid-cols-[150px_1fr_auto] items-center gap-3 rounded-xl bg-white/70 p-2">
-          <div><p className="font-semibold text-slate-900">Test di broncoreversibilità</p><p className="text-[8.5pt] text-slate-500">FEV₁ prima e dopo il broncodilatatore</p></div>
-          <svg viewBox="0 0 340 44" className="w-full" role="img" aria-label="FEV1 prima e dopo broncodilatatore">
-            {[['Prima', Number(s.fev1_l), '#94a3b8', 4], ['Dopo', Number(s.fev1_post_l), '#3987e5', 24]].map(([t, v, c, y]) => (
-              <g key={t as string}>
-                <text x={0} y={(y as number) + 11} fontSize={9.5} fill="#334155">{t as string}</text>
-                <rect x={38} y={y as number} width={(Number(v) / Math.max(Number(s.fev1_l), Number(s.fev1_post_l))) * 230} height={14} rx={4} fill={c as string} />
-                <text x={38 + (Number(v) / Math.max(Number(s.fev1_l), Number(s.fev1_post_l))) * 230 + 6} y={(y as number) + 11} fontSize={9.5} fill="#0f172a">{num(v, 2)} L</text>
-              </g>
-            ))}
-          </svg>
-          <div className="text-right">
-            <p className="text-[13pt] font-bold tabular-nums text-slate-900">{rev > 0 ? '+' : ''}{num(rev)}%</p>
-            <Etichetta stato={rev >= 12 ? 'alterato' : 'bene'}>{rev >= 12 ? 'positivo (≥ 12%)' : 'negativo'}</Etichetta>
-          </div>
-        </div>
-      )}
-      {feno != null && (
-        <BarraZone etichetta="FeNO" nota="ossido nitrico esalato (infiammazione)" valore={feno} unita=" ppb" min={0} max={bambino ? 70 : 100}
-          zone={[{ da: 0, a: f1, stato: 'bene', testo: 'basso' }, { da: f1, a: f2 + 0.01, stato: 'attenzione', testo: 'intermedio' }, { da: f2 + 0.01, a: 1000, stato: 'alterato', testo: 'elevato' }]} />
-      )}
-      {feno != null && <p className="text-[8.5pt] text-slate-500">FeNO {livelloFeno(feno, etaAnni)} secondo le soglie ATS per età.</p>}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- punteggi
-type Banda = [number, number, Stato, string];
-const SCALE: Record<string, { nome: string; sotto: string; min: number; max: number; bande: Banda[] }> = {
-  c_act: { nome: 'C-ACT', sotto: 'controllo dell\'asma (4–11 anni)', min: 0, max: 27, bande: [[0, 19.5, 'critico', 'non ben controllato'], [19.5, 27, 'bene', 'ben controllato']] },
-  act: { nome: 'ACT', sotto: 'controllo dell\'asma (da 12 anni)', min: 5, max: 25, bande: [[5, 15.5, 'critico', 'scarso controllo'], [15.5, 19.5, 'attenzione', 'non ben controllato'], [19.5, 25, 'bene', 'ben controllato']] },
-  scorad: { nome: 'SCORAD', sotto: 'gravità della dermatite atopica', min: 0, max: 103, bande: [[0, 25, 'bene', 'lieve'], [25, 50, 'attenzione', 'moderata'], [50, 103, 'critico', 'grave']] },
-  poem: { nome: 'POEM', sotto: 'eczema nell\'ultima settimana (genitori)', min: 0, max: 28, bande: [[0, 2.5, 'bene', 'assente'], [2.5, 7.5, 'bene', 'lieve'], [7.5, 16.5, 'attenzione', 'moderato'], [16.5, 24.5, 'alterato', 'grave'], [24.5, 28, 'critico', 'molto grave']] },
-  uas7: { nome: 'UAS7', sotto: 'attività dell\'orticaria in 7 giorni', min: 0, max: 42, bande: [[0, 6.5, 'bene', 'controllata'], [6.5, 15.5, 'attenzione', 'lieve'], [15.5, 27.5, 'alterato', 'moderata'], [27.5, 42, 'critico', 'grave']] },
-};
-
-function Punteggio({ p, storico }: { p: RigaAllergo; storico: RigaAllergo[] }) {
-  const sc = SCALE[String(p.scala)];
-  if (!sc) return null;
-  const v = Number(p.punteggio);
-  const W = 300;
-  const x = (n: number) => 6 + ((Math.min(sc.max, Math.max(sc.min, n)) - sc.min) / (sc.max - sc.min)) * W;
-  const banda = sc.bande.find(([a, b]) => v >= a && v < b) ?? sc.bande[sc.bande.length - 1]!;
-  const serie = storico.filter((r) => r.scala === p.scala && String(r.data) <= String(p.data)).sort((a, b) => String(a.data).localeCompare(String(b.data))).slice(-6);
-  const regioni = (p.dettagli as { regioni?: Record<string, number> } | null)?.regioni;
-  return (
-    <div className="grid grid-cols-[150px_1fr_auto] items-center gap-3 border-b border-dashed border-yellow-200 py-2 last:border-0">
-      <div>
-        <p className="text-[12pt] font-bold text-slate-900">{sc.nome}</p>
-        <p className="text-[8.5pt] text-slate-500">{sc.sotto}</p>
-      </div>
-      <div>
-        <svg viewBox="0 0 312 44" className="w-full" role="img" aria-label={`${sc.nome}: ${v}, ${banda[3]}`}>
-          {sc.bande.map(([a, b, st, t]) => (
-            <g key={a}>
-              <rect x={x(a)} y={14} width={Math.max(0, x(b) - x(a) - 2)} height={12} rx={5} fill={TINTA[st]} stroke={STATO[st]} strokeWidth={0.8} />
-              {x(b) - x(a) > 40 && <text x={(x(a) + x(b)) / 2} y={39} fontSize={8} textAnchor="middle" fill="#475569">{t}</text>}
-            </g>
-          ))}
-          <path d={`M${x(v) - 6},3 L${x(v) + 6},3 L${x(v)},12 Z`} fill="#0f172a" />
-          <rect x={x(v) - 1.5} y={11} width={3} height={18} rx={1} fill="#0f172a" />
-        </svg>
-        {serie.length >= 2 && (
-          <div className="flex items-center gap-2 text-[8.5pt] text-slate-500">
-            <span>Andamento:</span>
-            <svg viewBox="0 0 160 30" width={160} height={30} role="img" aria-label={`Andamento ${sc.nome}`}>
-              {(() => {
-                const px = (i: number) => 6 + (i / (serie.length - 1)) * 148;
-                const py = (n: number) => 26 - ((n - sc.min) / (sc.max - sc.min)) * 22;
-                const d = serie.map((r, i) => `${i ? 'L' : 'M'}${px(i)},${py(Number(r.punteggio))}`).join(' ');
-                return <>
-                  <path d={d} fill="none" stroke="#a16207" strokeWidth={2} strokeLinejoin="round" />
-                  {serie.map((r, i) => <circle key={String(r.id)} cx={px(i)} cy={py(Number(r.punteggio))} r={3.5} fill="#ffffff" stroke="#a16207" strokeWidth={2} />)}
-                </>;
-              })()}
-            </svg>
-            <span>{serie.map((r) => num(r.punteggio)).join(' → ')}</span>
-          </div>
-        )}
-      </div>
-      <div className="flex items-center gap-3 text-right">
-        {regioni && Object.values(regioni).some((x2) => x2 > 0) && (
-          <span className="flex gap-1"><MappaCorporea regioni={regioni} lato="fronte" altezza={58} /><MappaCorporea regioni={regioni} lato="retro" altezza={58} /></span>
-        )}
-        <div>
-          <p className="text-[16pt] font-bold tabular-nums text-slate-900">{num(v)}</p>
-          <Etichetta stato={banda[2]}>{banda[3]}</Etichetta>
-        </div>
-      </div>
-    </div>
-  );
-}
+const SCALE_MAX: Record<string, [number, number]> = { c_act: [0, 27], act: [5, 25], scorad: [0, 103], poem: [0, 28], uas7: [0, 42] };
 
 // ---------------------------------------------------------------- decorazioni
 function Decorazione() {
@@ -369,7 +167,6 @@ function Tessera({ icona, titolo, valore, colore }: { icona: keyof typeof ICONE;
   );
 }
 
-const giornoLocale = (iso: unknown) => new Date(String(iso)).toLocaleDateString('sv-SE'); // AAAA-MM-GG nel fuso locale
 const dataIt = (iso: unknown) => new Date(String(iso).length === 10 ? `${iso}T12:00:00` : String(iso)).toLocaleDateString('it-IT');
 const dataLunga = (iso: unknown) => new Date(String(iso).length === 10 ? `${iso}T12:00:00` : String(iso)).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -379,19 +176,17 @@ export function RefertoGrafico({ impostazioni, studio, paziente, codiceFiscale, 
   impostazioni: ImpostazioniReferto | null; studio: Studio | null; paziente: AllergoPaziente; codiceFiscale: string | null;
   visita: RigaAllergo; anamnesi: Record<string, unknown>; prima: RigaAllergo | null; dati: DatiGrafici;
 }) {
-  const giorno = giornoLocale(visita.data);
-  const delGiorno = (r: RigaAllergo[]) => r.filter((x) => String(x.data).slice(0, 10) === giorno);
-  const test = delGiorno(dati.test);
-  const prick = test.filter((t) => t.tipo === 'prick' || t.tipo === 'prick_by_prick');
-  const ige = test.filter((t) => String(t.tipo).startsWith('ige_') && t.tipo !== 'ige_totali' && t.valore != null);
-  const spiro = delGiorno(dati.spirometrie)[0];
-  const punteggi = delGiorno(dati.punteggi);
-  const generato = testoTest(giorno, { test: dati.test, spirometrie: dati.spirometrie, punteggi: dati.punteggi });
-  const noteTest = String(visita.test_eseguiti ?? '').trim();
-  const mostraNoteTest = noteTest && noteTest !== generato.trim();
-  const etaAnni = (Date.parse(giorno) - Date.parse(paziente.data_nascita)) / (365.25 * 86_400_000);
+  const giorno = giornoVisita(visita.data);
+  const g = datiDelGiorno(giorno, dati);
+  const noteTest = g.noteLibere(visita.test_eseguiti);
+  // Andamenti: solo dati registrati fino a questa visita, almeno due valori.
+  const finoA = (r: RigaAllergo[]) => r.filter((x) => String(x.data).slice(0, 10) <= giorno).sort((a2, b2) => String(a2.data).localeCompare(String(b2.data)));
+  const andamentoFev1 = finoA(dati.spirometrie).filter((x) => x.fev1_pct != null).slice(-6).map((x) => ({ data: String(x.data), valore: Number(x.fev1_pct) }));
+  const scaleDelGiorno = [...new Set(g.punteggi.map((p) => String(p.scala)))];
+  const regioniScorad = (g.punteggi.find((p) => p.scala === 'scorad')?.dettagli as { regioni?: Record<string, number> } | null)?.regioni;
   const controllo = visita.tipo !== 'prima_visita' && prima && prima.id !== visita.id;
   const firma = impostazioni?.firma ?? '';
+  const medico = righeMedico(impostazioni);
   const chiusura = (impostazioni?.chiusura ?? '').replace(/\{\{email\}\}/g, impostazioni?.email_contatti ?? '___').replace(/\{\{firma\}\}/g, firma || 'del medico');
   const diagnosi = String(visita.diagnosi_testo ?? '').split('\n').map((d) => d.replace(/^\s*-\s*/, '').trim()).filter(Boolean);
   const coloriDiagnosi = ['#fbcfe8', '#bae6fd', '#bbf7d0', '#fde68a', '#ddd6fe', '#fed7aa'];
@@ -465,24 +260,38 @@ export function RefertoGrafico({ impostazioni, studio, paziente, codiceFiscale, 
 
       {visita.esame_obiettivo ? <Riquadro s="esame" titolo="Visita medica"><TestoColorato testo={String(visita.esame_obiettivo)} /></Riquadro> : null}
 
-      {(prick.length > 0 || ige.length > 0 || mostraNoteTest) && (
+      {(g.prick.length > 0 || g.ige.length > 0 || g.altri.length > 0 || noteTest) && (
         <Riquadro s="test" titolo="Test allergologici">
-          {prick.length > 0 && <GraficoPrick righe={prick} />}
-          {ige.length > 0 && <div className="mt-3"><GraficoIgE righe={ige} /></div>}
-          {mostraNoteTest && <div className="mt-2 rounded-xl bg-white/70 p-2"><TestoColorato testo={noteTest} /></div>}
+          <div className="space-y-2">
+            {g.prick.length > 0 && <TabellaPrick righe={g.prick} stile="colori" />}
+            {g.ige.length > 0 && <TabellaIgE righe={g.ige} stile="colori" />}
+            {g.altri.length > 0 && <TabellaAltriTest righe={g.altri} stile="colori" />}
+            {noteTest && <div className="rounded-xl bg-white/70 p-2"><TestoColorato testo={noteTest} /></div>}
+          </div>
         </Riquadro>
       )}
 
-      {spiro && (
+      {g.spirometria && (
         <Riquadro s="respiro" titolo="Il respiro: spirometria">
-          <Spirometria s={spiro} etaAnni={etaAnni} />
-          <p className="mt-1 text-[8.5pt] text-slate-500">Valori in % del previsto per età, sesso e altezza. Le fasce colorate sono indicative: l'interpretazione è del medico.</p>
+          <TabellaSpirometria s={g.spirometria} stile="colori" />
+          <Andamento titolo="FEV₁ nelle visite (% del previsto)" punti={andamentoFev1} unita="%" min={Math.min(40, ...andamentoFev1.map((p) => p.valore))} max={Math.max(140, ...andamentoFev1.map((p) => p.valore))} />
         </Riquadro>
       )}
 
-      {punteggi.length > 0 && (
+      {g.punteggi.length > 0 && (
         <Riquadro s="punteggi" titolo="I punteggi della visita">
-          {punteggi.map((p) => <Punteggio key={String(p.id)} p={p} storico={dati.punteggi} />)}
+          <TabellaPunteggi righe={g.punteggi} stile="colori" />
+          {regioniScorad && Object.values(regioniScorad).some((v) => v > 0) && (
+            <div className="mt-2 flex items-center gap-3 rounded-xl bg-white/80 p-2" style={{ breakInside: 'avoid' }}>
+              <Mappa regioni={regioniScorad} lato="fronte" altezza={90} /><Mappa regioni={regioniScorad} lato="retro" altezza={90} />
+              <p className="text-[9.5pt] text-slate-700">Zone della pelle interessate dalla dermatite oggi (più scuro = area più estesa).</p>
+            </div>
+          )}
+          {scaleDelGiorno.map((sc) => {
+            const [min, max] = SCALE_MAX[sc] ?? [0, 30];
+            const punti = finoA(dati.punteggi).filter((p) => p.scala === sc).slice(-6).map((p) => ({ data: String(p.data), valore: Number(p.punteggio) }));
+            return <Andamento key={sc} titolo={`${SCALE_REFERTO[sc]?.nome ?? sc} nelle visite`} punti={punti} unita="" min={min} max={max} />;
+          })}
         </Riquadro>
       )}
 
@@ -513,11 +322,14 @@ export function RefertoGrafico({ impostazioni, studio, paziente, codiceFiscale, 
         </div>
         <div className="w-64 text-center">
           <div className="mb-1 h-10 border-b border-slate-400" />
-          <p className="font-semibold">{firma || 'Il medico'}</p>
-          {impostazioni?.qualifica && <p className="text-[9pt] text-slate-600">{impostazioni.qualifica}</p>}
+          <p className="text-[8.5pt] text-slate-500">Il medico</p>
+          {medico.length ? medico.map((r, i) => <p key={r} className={i === 0 ? 'font-semibold' : 'text-[9pt] text-slate-600'}>{r}</p>) : <p className="font-semibold">Il medico</p>}
         </div>
       </div>
-      <p className="mt-4 text-[7.5pt] text-slate-400">Documento generato il {fmtDataOra(new Date())}. Contiene dati sanitari: conservare e trasmettere con riservatezza.</p>
+      <p className="mt-4 border-t border-slate-200 pt-1 text-[7.5pt] text-slate-500">
+        Referto redatto e firmato dal medico; i valori dei test sono riportati come misurati. Documento sanitario contenente dati personali
+        relativi alla salute (Reg. UE 2016/679): conservare e trasmettere con riservatezza. Generato il {fmtDataOra(new Date())}.
+      </p>
     </article>
   );
 }

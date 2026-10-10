@@ -126,7 +126,9 @@ export function ImpostazioniRefertoForm({ claims, onFatto }: { claims: ClaimsApp
     const riga = {
       utente_id: claims.sub, studio_id: claims.app_studio_id, intestazione: x.intestazione?.trim() || 'Ambulatorio di Allergologia',
       sottotitolo: x.sottotitolo?.trim() || null, luogo: x.luogo?.trim() || null, firma: x.firma?.trim() || null, qualifica: x.qualifica?.trim() || null,
-      email_contatti: x.email_contatti?.trim() || null, chiusura: x.chiusura?.trim() || null, aggiornato_il: new Date().toISOString(),
+      email_contatti: x.email_contatti?.trim() || null, chiusura: x.chiusura?.trim() || null,
+      ordine_provincia: x.ordine_provincia?.trim() || null, ordine_numero: x.ordine_numero?.trim() || null, telefono: x.telefono?.trim() || null,
+      aggiornato_il: new Date().toISOString(),
     };
     const { error } = await supabase.schema('anagrafica').from('allergo_impostazioni').upsert(riga);
     setEsito(error ? { ok: false, testo: error.message } : { ok: true, testo: 'Impostazioni salvate.' });
@@ -141,6 +143,9 @@ export function ImpostazioniRefertoForm({ claims, onFatto }: { claims: ClaimsApp
       {campo('firma', 'Firma', 'Es. Dott.ssa Maria Rossi')}
       {campo('qualifica', 'Qualifica')}
       {campo('email_contatti', 'Email per i contatti')}
+      {campo('telefono', 'Telefono dell\'ambulatorio')}
+      {campo('ordine_provincia', 'Ordine dei Medici di (provincia)', 'Es. Catanzaro')}
+      {campo('ordine_numero', 'Numero di iscrizione all\'Albo', 'Compare sotto la firma: rende il referto riconducibile al medico')}
       <label className="text-sm md:col-span-2"><span className="block text-slate-500">Frase di chiusura ({'{{email}}'} e {'{{firma}}'} vengono sostituiti)</span>
         <textarea rows={3} value={String(x.chiusura ?? '')} onChange={(e) => setV({ ...x, chiusura: e.target.value })} className={stileInput} /></label>
       <div className="md:col-span-2"><Bottone type="submit" variante="primario">Salva impostazioni</Bottone></div>

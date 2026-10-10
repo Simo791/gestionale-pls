@@ -106,17 +106,22 @@ piano di cura, controllo, frase di contatto e firma.
 - **Piano d'azione per la reazione allergica** nel formato dell'ambulatorio: tabella sintomi → adrenalina/antistaminico,
   dosaggio, chi chiamare (112), contatti di emergenza, istruzioni per l'autoiniettore.
 
-## Referto a colori (per bambini e famiglie)
+## Referti: classico e a colori
 
-Dalla lista visite: «Referto a colori» oppure «Referto classico» (testo, come le lettere).
-Il referto a colori ha sezioni colorate con icone, scheda del bambino, riquadri «in breve» (peso, altezza,
-saturazione, prossimo controllo) e i dati della giornata schematizzati:
-- **prick test**: barre del pomfo in mm, soglia di positività (controllo negativo + 3 mm), istamina e controllo
-  negativo distinti, positivi evidenziati;
-- **IgE specifiche/molecolari**: scala logaritmica con le classi 0–5;
-- **spirometria**: FEV₁, FVC, FEV₁/FVC (soglie diverse sotto/sopra i 12 anni), FEF₂₅₋₇₅ su fasce colorate,
-  broncoreversibilità prima/dopo (positiva ≥ 12%), FeNO con soglie ATS per età;
-- **punteggi** (c-ACT, ACT, SCORAD con mappa corporea, POEM, UAS7): barra con fasce, valore, giudizio e andamento
-  delle ultime misure;
-- piano di cura con righe evidenziate (✅ migliora, ❌ non migliora, ➡ attenzione) e diagnosi a etichette.
-Gli stati usano sempre colore + scritta. In stampa i colori sono mantenuti (`print-color-adjust: exact`).
+- **Classico** (comunicazioni tra medici): intestazione della struttura, medico con iscrizione all'Ordine, titolo
+  «Referto di visita allergologica», luogo, data e ora, tabella dei dati del paziente, sezioni numerate per titolo,
+  accertamenti in tabelle di valori, diagnosi numerate, piano, firma, nota privacy.
+- **A colori** (consegnato ai genitori): stesse informazioni e stessa firma, impaginazione colorata con icone.
+  I grafici compaiono solo dove aiutano la famiglia: andamento di FEV₁ e dei punteggi nelle visite (se ci sono
+  almeno due valori) e mappa delle zone della pelle dello SCORAD.
+
+Valore legale (scelte di progetto):
+- i test allergologici, la spirometria e i punteggi sono riportati **come valori misurati**, in tabella: nessun
+  grafico interpretativo, nessuna fascia «normale/alterato», nessun giudizio calcolato dal programma; l'interpretazione
+  è quella scritta dal medico (conclusioni e diagnosi);
+- il referto riporta struttura, medico (nome, qualifica, n. di iscrizione all'Ordine), paziente identificato
+  (nome, data di nascita, codice fiscale), data e ora della visita e spazio per la firma;
+- il PDF prodotto dal browser non è firmato digitalmente: ha valore se stampato e firmato a mano, oppure se firmato
+  con firma digitale qualificata (CAD, D.Lgs. 82/2005) prima dell'invio per email;
+- i calcolatori dell'app (SCORAD, c-ACT, criteri di anafilassi, dose dell'autoiniettore) sono di supporto al medico
+  e non compaiono nel referto come giudizi.

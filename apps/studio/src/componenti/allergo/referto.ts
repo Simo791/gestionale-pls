@@ -23,6 +23,9 @@ export interface ImpostazioniReferto {
   qualifica: string | null;
   email_contatti: string | null;
   chiusura: string | null;
+  ordine_provincia?: string | null;
+  ordine_numero?: string | null;
+  telefono?: string | null;
 }
 
 export const PROFILI: Record<string, string> = {

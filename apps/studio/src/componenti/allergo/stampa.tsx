@@ -1,10 +1,13 @@
-import { AREE_ALLERGO, type AllergoPaziente, type AreaAllergo, type MembroStudio, type RigaAllergo, type Studio } from '@pls/shared';
+import { AREE_ALLERGO, etaEstesa, type AllergoPaziente, type AreaAllergo, type MembroStudio, type RigaAllergo, type Studio } from '@pls/shared';
 import type { ReactNode } from 'react';
 import { AVVERTENZA_DIETA, DIETE } from '../../lib/diete';
 import { fmtDataOra, fmtGiornoIso, oggiIso } from '../../lib/formato';
 import { TabellaStampa } from '../Stampa';
 import { CLASSI_TERAPIA, ESITI_TPO, TIPI_TEST } from './definizioni';
 import type { ImpostazioniReferto } from './referto';
+import {
+  datiDelGiorno, giornoVisita, TabellaAltriTest, TabellaIgE, TabellaPrick, TabellaPunteggi, TabellaSpirometria, type DatiGiornata,
+} from './tabelleReferto';
 import { giorno, s } from './Registro';
 
 export interface Firmatario { nome: string; ruolo: string }
@@ -87,94 +90,158 @@ export function TestoReferto({ testo }: { testo: string | null | undefined }) {
   return <div className="space-y-0.5">{blocchi}</div>;
 }
 
-const voce = (titolo: string, testo: unknown) => (testo ? <p className="mb-1"><b>{titolo}:</b> {String(testo)}</p> : null);
+const TIPO_VISITA_REFERTO: Record<string, string> = {
+  prima_visita: 'Prima visita', controllo: 'Visita di controllo', urgenza: 'Visita urgente', test: 'Seduta di test allergologici', altro: 'Visita',
+};
 
-/** Referto della visita nel formato delle lettere dell'ambulatorio. */
-export function RefertoVisita({ impostazioni, studio, paziente, codiceFiscale, visita, anamnesi, prima }: {
+/** Titolo di sezione del referto classico. */
+const Titolo = ({ children }: { children: ReactNode }) => (
+  <h2 className="mb-1 mt-4 border-b border-black pb-0.5 text-[10.5pt] font-bold uppercase tracking-wide" style={{ breakAfter: 'avoid' }}>{children}</h2>
+);
+const Voce = ({ titolo, testo }: { titolo: string; testo: unknown }) => (testo ? <p className="mb-1"><b>{titolo}:</b> {String(testo)}</p> : null);
+
+/** Riga «ruolo, nome, Ordine» del medico firmatario. */
+export function righeMedico(i: ImpostazioniReferto | null): string[] {
+  return [
+    i?.firma ?? '',
+    i?.qualifica ?? '',
+    i?.ordine_numero ? `Iscr. Ordine dei Medici${i.ordine_provincia ? ` di ${i.ordine_provincia}` : ''} n. ${i.ordine_numero}` : '',
+  ].filter(Boolean);
+}
+
+/**
+ * Referto della visita (versione classica). Contiene gli elementi che rendono il documento
+ * riconducibile e valido: struttura, medico con iscrizione all'Ordine, paziente identificato,
+ * data e ora, contenuto clinico redatto dal medico, firma. I valori dei test sono riportati
+ * come misurati, senza interpretazioni automatiche.
+ */
+export function RefertoVisita({ impostazioni, studio, paziente, codiceFiscale, visita, anamnesi, prima, dati }: {
   impostazioni: ImpostazioniReferto | null; studio: Studio | null; paziente: AllergoPaziente; codiceFiscale: string | null;
-  visita: RigaAllergo; anamnesi: Record<string, unknown>; prima: RigaAllergo | null;
+  visita: RigaAllergo; anamnesi: Record<string, unknown>; prima: RigaAllergo | null; dati: DatiGiornata;
 }) {
   const controllo = visita.tipo !== 'prima_visita' && prima && prima.id !== visita.id;
-  const firma = impostazioni?.firma ?? '';
-  const chiusura = (impostazioni?.chiusura ?? '').replace(/\{\{email\}\}/g, impostazioni?.email_contatti ?? '___').replace(/\{\{firma\}\}/g, firma || 'del medico');
-  const nato = paziente.sesso === 'F' ? 'Nata' : 'Nato';
-  return (
-    <article className="text-[11pt] leading-snug text-black">
-      <header className="mb-4 border-b-2 border-black pb-2 text-center">
-        <p className="text-[14pt] font-bold">{impostazioni?.intestazione ?? 'Ambulatorio di Allergologia'}</p>
-        {impostazioni?.sottotitolo && <p>{impostazioni.sottotitolo}</p>}
-        {!impostazioni?.sottotitolo && studio?.nome && <p className="text-[10pt]">{studio.nome}</p>}
-      </header>
-      <p className="mb-3 text-right">{[impostazioni?.luogo, giorno(visita.data)].filter(Boolean).join(', ')}</p>
+  const medico = righeMedico(impostazioni);
+  const chiusura = (impostazioni?.chiusura ?? '').replace(/\{\{email\}\}/g, impostazioni?.email_contatti ?? '___')
+    .replace(/\{\{firma\}\}/g, impostazioni?.firma || 'del medico');
+  const giornoV = giornoVisita(visita.data);
+  const g = datiDelGiorno(giornoV, dati);
+  const note = g.noteLibere(visita.test_eseguiti);
+  const haTest = g.prick.length + g.ige.length + g.altri.length > 0 || g.spirometria || g.punteggi.length > 0 || note;
+  const diagnosi = String(visita.diagnosi_testo ?? '').split('\n').map((d) => d.replace(/^\s*-\s*/, '').trim()).filter(Boolean);
+  const ora = new Date(String(visita.data)).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  const cella = 'border border-black px-2 py-0.5 align-top';
+  const testa = `${cella} w-32 bg-gray-100 text-left font-semibold`;
+  const misure = [visita.peso_kg != null && `Peso ${String(visita.peso_kg).replace('.', ',')} kg`, visita.altezza_cm != null && `Altezza ${String(visita.altezza_cm).replace('.', ',')} cm`,
+    visita.saturazione != null && `SpO₂ ${visita.saturazione}%`].filter(Boolean).join(' · ');
 
-      <div className="mb-3">
-        <p><b>Cognome e Nome:</b> {paziente.cognome} {paziente.nome}{codiceFiscale ? ` · C.F. ${codiceFiscale}` : ''}</p>
-        <p>{nato}{paziente.luogo_nascita ? ` a ${paziente.luogo_nascita}` : ''} il {fmtGiornoIso(paziente.data_nascita)}{paziente.residenza ? ` e residente a ${paziente.residenza}` : ''}</p>
-        <p>{[paziente.genitore_telefono && `Tel.: ${paziente.genitore_telefono}`, paziente.genitore_email && `e-mail: ${paziente.genitore_email}`].filter(Boolean).join('   ')}</p>
-        {paziente.pediatra_curante && <p>PdF: {paziente.pediatra_curante}</p>}
+  return (
+    <article className="text-[10.5pt] leading-snug text-black">
+      <header className="flex items-start justify-between gap-6 border-b-[3px] border-double border-black pb-2">
+        <div>
+          <p className="text-[14pt] font-bold">{impostazioni?.intestazione ?? 'Ambulatorio di Allergologia'}</p>
+          {impostazioni?.sottotitolo && <p>{impostazioni.sottotitolo}</p>}
+          {studio?.nome && <p>{studio.nome}</p>}
+          <p className="text-[9pt]">{[studio?.indirizzo, impostazioni?.telefono && `Tel. ${impostazioni.telefono}`, impostazioni?.email_contatti].filter(Boolean).join(' · ')}</p>
+        </div>
+        {medico.length > 0 && <div className="text-right text-[9.5pt]">{medico.map((r, i) => <p key={r} className={i === 0 ? 'font-semibold' : ''}>{r}</p>)}</div>}
+      </header>
+
+      <div className="mb-2 mt-3 flex items-end justify-between">
+        <h1 className="text-[13pt] font-bold uppercase tracking-wide">Referto di visita allergologica</h1>
+        <p className="text-right">{[impostazioni?.luogo, giorno(visita.data)].filter(Boolean).join(', ')} · ore {ora}</p>
       </div>
 
-      {voce('Anamnesi familiare', anamnesi.anamnesi_familiare)}
-      {voce('Anamnesi fisiologica', anamnesi.anamnesi_fisiologica)}
-      {voce('Anamnesi patologica remota', anamnesi.anamnesi_remota)}
+      <table className="mb-2 w-full border-collapse text-[10pt]">
+        <tbody>
+          <tr><th className={testa}>Paziente</th><td className={`${cella} font-semibold`}>{paziente.cognome} {paziente.nome}</td>
+            <th className={testa}>Tipo di visita</th><td className={cella}>{TIPO_VISITA_REFERTO[String(visita.tipo)] ?? 'Visita'}</td></tr>
+          <tr><th className={testa}>{paziente.sesso === 'F' ? 'Nata' : 'Nato'}</th>
+            <td className={cella}>{paziente.luogo_nascita ? `a ${paziente.luogo_nascita} ` : ''}il {fmtGiornoIso(paziente.data_nascita)} ({etaEstesa(paziente.data_nascita, giornoV)})</td>
+            <th className={testa}>Codice fiscale</th><td className={`${cella} font-mono`}>{codiceFiscale ?? '—'}</td></tr>
+          <tr><th className={testa}>Residenza</th><td className={cella}>{paziente.residenza ?? '—'}</td>
+            <th className={testa}>Pediatra curante</th><td className={cella}>{paziente.pediatra_curante ?? '—'}</td></tr>
+          <tr><th className={testa}>Genitore</th>
+            <td className={cella} colSpan={3}>{[paziente.genitore_nome, paziente.genitore_telefono && `tel. ${paziente.genitore_telefono}`, paziente.genitore_email].filter(Boolean).join(' · ') || '—'}</td></tr>
+        </tbody>
+      </table>
+      {visita.motivo && !/^(controllo clinico|prima visita allergologica)$/i.test(String(visita.motivo)) && <p><b>Motivo della visita:</b> {String(visita.motivo)}</p>}
+
+      <Titolo>Anamnesi</Titolo>
+      <Voce titolo="Familiare" testo={anamnesi.anamnesi_familiare} />
+      <Voce titolo="Fisiologica" testo={anamnesi.anamnesi_fisiologica} />
+      <Voce titolo="Patologica remota" testo={anamnesi.anamnesi_remota} />
+      <div className="grid grid-cols-2 gap-x-6">
+        <Voce titolo="Abitazione" testo={anamnesi.abitazione} />
+        <Voce titolo="Animali domestici" testo={anamnesi.animali} />
+        <Voce titolo="Fumo passivo" testo={anamnesi.fumo_dettaglio} />
+        <Voce titolo="Farmaci" testo={anamnesi.farmaci} />
+        <Voce titolo="Alimentazione" testo={anamnesi.alimentazione} />
+        <Voce titolo="Sport" testo={anamnesi.sport} />
+        <Voce titolo="Sonno" testo={anamnesi.sonno} />
+      </div>
 
       {controllo ? (
         <>
-          <p className="mt-2 font-bold">Prima osservazione clinica {giorno(prima!.data)}:</p>
+          <Titolo>Prima osservazione clinica ({giorno(prima!.data)})</Titolo>
           <TestoReferto testo={String(prima!.anamnesi ?? '')} />
-          {visita.anamnesi ? <TestoReferto testo={String(visita.anamnesi)} /> : null}
+          {visita.anamnesi ? <><Titolo>Anamnesi patologica</Titolo><TestoReferto testo={String(visita.anamnesi)} /></> : null}
+          <Titolo>Controllo clinico del {giorno(visita.data)}</Titolo>
+          <TestoReferto testo={String(visita.decorso ?? '')} />
         </>
       ) : (
         <>
-          <p className="mt-2 font-bold">Anamnesi patologica prossima:</p>
+          <Titolo>Anamnesi patologica prossima</Titolo>
           <TestoReferto testo={String(visita.anamnesi ?? '')} />
         </>
       )}
 
-      <div className="mt-2">
-        {voce('Abitazione', anamnesi.abitazione)}
-        {voce('Animali domestici', anamnesi.animali)}
-        {voce('Fumo passivo', anamnesi.fumo_dettaglio)}
-        {voce('Farmaci', anamnesi.farmaci)}
-        {voce('Alimentazione', anamnesi.alimentazione)}
-        {voce('Sport', anamnesi.sport)}
-        {voce('Sonno', anamnesi.sonno)}
-      </div>
-
-      {controllo && (
+      {(visita.esame_obiettivo || misure) ? (
         <>
-          <p className="mt-3 font-bold">Controllo clinico del {giorno(visita.data)}</p>
-          <TestoReferto testo={String(visita.decorso ?? '')} />
+          <Titolo>Esame obiettivo</Titolo>
+          {misure && <p className="mb-1 font-semibold">{misure}</p>}
+          <TestoReferto testo={String(visita.esame_obiettivo ?? '')} />
+        </>
+      ) : null}
+
+      {haTest ? (
+        <>
+          <Titolo>Accertamenti eseguiti</Titolo>
+          <div className="space-y-2">
+            {g.prick.length > 0 && <TabellaPrick righe={g.prick} stile="classico" />}
+            {g.ige.length > 0 && <TabellaIgE righe={g.ige} stile="classico" />}
+            {g.altri.length > 0 && <TabellaAltriTest righe={g.altri} stile="classico" />}
+            {g.spirometria && <><p className="font-semibold">Spirometria{g.spirometria.feno_ppb != null ? ' e FeNO' : ''}</p><TabellaSpirometria s={g.spirometria} stile="classico" /></>}
+            {g.punteggi.length > 0 && <TabellaPunteggi righe={g.punteggi} stile="classico" />}
+            {note && <TestoReferto testo={note} />}
+          </div>
+        </>
+      ) : null}
+
+      {visita.conclusioni ? <><Titolo>Conclusioni</Titolo><TestoReferto testo={String(visita.conclusioni)} /></> : null}
+      {diagnosi.length > 0 && (
+        <>
+          <Titolo>Diagnosi</Titolo>
+          <ol className="ml-5 list-decimal">{diagnosi.map((d) => <li key={d}>{d}</li>)}</ol>
         </>
       )}
-
-      {(visita.esame_obiettivo || visita.peso_kg) ? (
-        <div className="mt-3">
-          <p className="font-bold">ESAME OBIETTIVO{visita.peso_kg && !String(visita.esame_obiettivo ?? '').includes('Peso') ? ` · Peso: ${String(visita.peso_kg).replace('.', ',')} kg` : ''}</p>
-          <TestoReferto testo={String(visita.esame_obiettivo ?? '')} />
-        </div>
-      ) : null}
-
-      {visita.test_eseguiti ? <div className="mt-3"><TestoReferto testo={String(visita.test_eseguiti)} /></div> : null}
-      {visita.conclusioni ? <div className="mt-3"><p className="font-bold">Conclusioni</p><TestoReferto testo={String(visita.conclusioni)} /></div> : null}
-      {visita.diagnosi_testo ? (
-        <div className="mt-3"><p className="font-bold">Diagnosi</p>
-          <ul className="ml-5 list-disc">{String(visita.diagnosi_testo).split('\n').map((d) => d.replace(/^\s*-\s*/, '').trim()).filter(Boolean).map((d) => <li key={d}>{d}</li>)}</ul>
-        </div>
-      ) : null}
-      {visita.piano ? <div className="mt-3"><p className="font-bold">Piano di cura</p><TestoReferto testo={String(visita.piano)} /></div> : null}
+      {visita.piano ? <><Titolo>Piano di cura</Titolo><TestoReferto testo={String(visita.piano)} /></> : null}
       {visita.prossimo_controllo && ![giorno(visita.prossimo_controllo), giorno(visita.prossimo_controllo).replace(/\//g, '.')].some((d) => String(visita.piano ?? '').includes(d))
-        ? <p className="mt-2">Visita di controllo: {giorno(visita.prossimo_controllo)}.</p> : null}
+        ? <p className="mt-2"><b>Prossimo controllo:</b> {giorno(visita.prossimo_controllo)}</p> : null}
 
       {chiusura.trim() && <p className="mt-4">{chiusura}</p>}
-      <footer className="mt-8 flex justify-end" style={{ breakInside: 'avoid' }}>
+      <footer className="mt-6 flex items-end justify-between gap-6" style={{ breakInside: 'avoid' }}>
+        <p className="text-[9.5pt]">{[impostazioni?.luogo, giorno(visita.data)].filter(Boolean).join(', ')}</p>
         <div className="w-72 text-center">
-          <p className="font-semibold">{firma || 'Il medico'}</p>
-          {impostazioni?.qualifica && <p className="text-[9pt]">{impostazioni.qualifica}</p>}
+          <p className="text-[9pt]">Il medico</p>
+          {medico.map((r, i) => <p key={r} className={i === 0 ? 'font-semibold' : 'text-[9pt]'}>{r}</p>)}
           <div className="mt-8 border-b border-black" />
+          <p className="text-[8pt] text-gray-600">firma</p>
         </div>
       </footer>
-      <p className="mt-6 text-[8pt] text-gray-600">Documento generato il {fmtDataOra(new Date())}. Contiene dati sanitari: conservare e trasmettere con riservatezza.</p>
+      <p className="mt-5 border-t border-gray-300 pt-1 text-[7.5pt] text-gray-600">
+        Documento sanitario contenente dati personali relativi alla salute (Reg. UE 2016/679): da conservare e trasmettere con riservatezza.
+        Generato il {fmtDataOra(new Date())}.
+      </p>
     </article>
   );
 }
