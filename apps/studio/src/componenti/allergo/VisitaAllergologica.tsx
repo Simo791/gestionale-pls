@@ -3,9 +3,12 @@ import { useState, type FormEvent } from 'react';
 import { q, useDati } from '../../lib/dati';
 import { supabase } from '../../lib/supabase';
 import Finestra from '../Finestra';
-import { Badge, Bottone, Errore, Pannello } from '../ui';
+import { Bottone, Caricamento, Errore, Pannello } from '../ui';
 import { CAMPI_SPIRO, TIPI_VISITA } from './definizioni';
 import { ModuloScala, NOMI_SCALA, type Scala } from './Punteggi';
+import AnamnesiGuidata from './ModuloAnamnesi';
+import { scelteIniziali, type Scelte } from './anamnesiTesti';
+import { OPZIONI_PREDEFINITE, resocontoVisite, type DatiResoconto, type OpzioniResoconto } from './resoconto';
 import { accoda, compila, modelliEffettivi, PACCHETTI, PROFILI, SEZIONI_MODELLO, testoTest, type ModelloAllergo } from './referto';
 import { giorno, ModuloRiga, oggi, s, stileInput } from './Registro';
 import { PannelloPrick } from './TestAllergologici';
@@ -16,13 +19,15 @@ type Campi = {
   diagnosi_testo: string; piano: string; prossimo_controllo: string;
 };
 type CampiCartella = Record<'anamnesi_familiare' | 'anamnesi_fisiologica' | 'anamnesi_remota' | 'abitazione' |
-  'animali' | 'fumo_dettaglio' | 'farmaci' | 'alimentazione' | 'sport', string>;
+  'animali' | 'fumo_dettaglio' | 'farmaci' | 'alimentazione' | 'sport' | 'sonno', string>;
 
 export const VOCI_CARTELLA: [keyof CampiCartella, string][] = [
   ['anamnesi_familiare', 'Anamnesi familiare'], ['anamnesi_fisiologica', 'Anamnesi fisiologica'], ['anamnesi_remota', 'Anamnesi patologica remota'],
   ['abitazione', 'Abitazione'], ['animali', 'Animali domestici'], ['fumo_dettaglio', 'Fumo passivo'], ['farmaci', 'Farmaci'],
-  ['alimentazione', 'Alimentazione'], ['sport', 'Sport'],
+  ['alimentazione', 'Alimentazione'], ['sport', 'Sport'], ['sonno', 'Sonno'],
 ];
+/** Voci a testo libero; le altre (abitazione, fumo, alimenti, farmaci, sport, sonno) hanno i menu guidati. */
+const VOCI_LIBERE: (keyof CampiCartella)[] = ['anamnesi_familiare', 'anamnesi_fisiologica', 'anamnesi_remota', 'animali'];
 
 const oraLocale = (iso?: string) => {
   const d = iso ? new Date(iso) : new Date();
@@ -40,30 +45,128 @@ function Area({ etichetta, valore, onChange, righe = 4, aiuto }: { etichetta: st
   );
 }
 
-/** Riepilogo della visita precedente, da consultare e da cui riprendere i testi. */
-function VisitaPrecedente({ v, prima, onRiprendi }: { v: RigaAllergo; prima: RigaAllergo | null; onRiprendi: (campo: keyof Campi, testo: string) => void }) {
-  const blocco = (titolo: string, campo: keyof Campi | null, testo: unknown) => testo ? (
-    <div className="border-t border-amber-100 pt-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">{titolo}</p>
-        {campo && <button type="button" onClick={() => onRiprendi(campo, String(testo))} className="text-xs text-teal-700 underline">Riprendi</button>}
-      </div>
-      <p className="whitespace-pre-line text-slate-700">{String(testo)}</p>
-    </div>
-  ) : null;
+// Sezioni importabili da una visita precedente: [campo della visita precedente, campo di destinazione, titolo].
+const SEZIONI_IMPORTABILI: [keyof Campi, keyof Campi, string][] = [
+  ['anamnesi', 'anamnesi', 'Anamnesi patologica prossima'],
+  ['decorso', 'decorso', 'Controllo clinico (decorso)'],
+  ['esame_obiettivo', 'esame_obiettivo', 'Esame obiettivo'],
+  ['test_eseguiti', 'test_eseguiti', 'Test eseguiti'],
+  ['conclusioni', 'conclusioni', 'Conclusioni'],
+  ['diagnosi_testo', 'diagnosi_testo', 'Diagnosi'],
+  ['piano', 'piano', 'Piano di cura'],
+];
+
+/** Visita precedente (a scelta tra tutte quelle passate) con importazione per sezione. */
+function VisitaPrecedente({ precedenti, prima, controllo, onImporta, onResoconto }: {
+  precedenti: RigaAllergo[]; prima: RigaAllergo | null; controllo: boolean;
+  onImporta: (voci: { campo: keyof Campi; testo: string; titolo: string }[], modo: 'aggiungi' | 'sostituisci') => void;
+  onResoconto: () => void;
+}) {
+  const [id, setId] = useState(precedenti[0]?.id ?? '');
+  const v = precedenti.find((x) => x.id === id) ?? precedenti[0]!;
+  // Nella prima visita il decorso non c'è: va nell'anamnesi.
+  const dest = (c: keyof Campi): keyof Campi => (c === 'decorso' && !controllo ? 'anamnesi' : c);
+  const disponibili = SEZIONI_IMPORTABILI.filter(([da]) => s(v, da).trim());
+  const voce = (da: keyof Campi, a: keyof Campi, titolo: string) => ({ campo: dest(a), testo: s(v, da), titolo });
   return (
-    <aside className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-sm lg:sticky lg:top-4 lg:max-h-[85vh] lg:overflow-y-auto">
-      <p className="font-semibold text-amber-900">Visita precedente · {giorno(v.data)} <Badge>{TIPI_VISITA[s(v, 'tipo')]}</Badge></p>
-      {prima && prima.id !== v.id && <p className="text-xs text-amber-800">Prima osservazione clinica: {giorno(prima.data)}</p>}
+    <aside className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-sm lg:sticky lg:top-4 lg:max-h-[88vh] lg:overflow-y-auto">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-semibold text-amber-900">Visite precedenti</p>
+        <span className="text-xs text-amber-800">{precedenti.length}</span>
+      </div>
+      <select value={v.id} onChange={(e) => setId(e.target.value)} aria-label="Visita da consultare" className={stileInput}>
+        {precedenti.map((x) => <option key={x.id} value={x.id}>{giorno(x.data)} · {TIPI_VISITA[s(x, 'tipo')]}</option>)}
+      </select>
+      {prima && <p className="text-xs text-amber-800">Prima osservazione clinica: {giorno(prima.data)}</p>}
+      <button type="button" onClick={onResoconto}
+              className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-left text-sm font-medium text-amber-900 hover:bg-amber-100">
+        📋 Resoconto di tutte le visite precedenti
+        <span className="block text-xs font-normal text-amber-800">Da usare come anamnesi patologica nel controllo</span>
+      </button>
+      {disponibili.length > 0 && (
+        <div className="flex flex-wrap gap-2 border-t border-amber-100 pt-2">
+          <Bottone variante="primario" onClick={() => onImporta(disponibili.map(([da, a, t]) => voce(da, a, t)), 'aggiungi')}>Importa tutte le sezioni</Bottone>
+        </div>
+      )}
       <p className="text-slate-600">{[v.peso_kg && `Peso ${s(v, 'peso_kg')} kg`, v.altezza_cm && `${s(v, 'altezza_cm')} cm`].filter(Boolean).join(' · ')}</p>
-      {blocco('Anamnesi prossima', 'anamnesi', v.anamnesi)}
-      {blocco('Decorso', null, v.decorso)}
-      {blocco('Test eseguiti', null, v.test_eseguiti)}
-      {blocco('Conclusioni', 'conclusioni', v.conclusioni)}
-      {blocco('Diagnosi', 'diagnosi_testo', v.diagnosi_testo)}
-      {blocco('Piano di cura', 'piano', v.piano)}
+      {disponibili.map(([da, a, titolo]) => (
+        <div key={da} className="border-t border-amber-100 pt-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">{titolo}</p>
+            <span className="flex gap-2">
+              <button type="button" onClick={() => onImporta([voce(da, a, titolo)], 'aggiungi')} className="text-xs text-teal-700 underline">Importa</button>
+              <button type="button" onClick={() => onImporta([voce(da, a, titolo)], 'sostituisci')} className="text-xs text-slate-500 underline">Sostituisci</button>
+            </span>
+          </div>
+          <p className="max-h-40 overflow-y-auto whitespace-pre-line text-slate-700">{s(v, da)}</p>
+        </div>
+      ))}
       {v.prossimo_controllo ? <p className="border-t border-amber-100 pt-2 text-amber-900">Controllo previsto: {giorno(v.prossimo_controllo)}</p> : null}
     </aside>
+  );
+}
+
+/** Finestra del resoconto: scelta delle voci, anteprima modificabile, inserimento. */
+function FinestraResoconto({ pseudo, visite, primaDel, controllo, onInserisci, onChiudi }: {
+  pseudo: string; visite: RigaAllergo[]; primaDel: string; controllo: boolean;
+  onInserisci: (testo: string, campo: keyof Campi, modo: 'aggiungi' | 'sostituisci') => void; onChiudi: () => void;
+}) {
+  const dati = useDati(async () => {
+    const leggi = (t: string) => q<RigaAllergo[]>(supabase.schema('clinica').from(t).select('*').eq('pseudo_id', pseudo));
+    const [test, spirometrie, punteggi, terapie, immunoterapie, reazioni] = await Promise.all(
+      ['allergo_test', 'allergo_spirometrie', 'allergo_punteggi', 'allergo_terapie', 'allergo_immunoterapie', 'allergo_reazioni'].map(leggi));
+    return { test: test!, spirometrie: spirometrie!, punteggi: punteggi!, terapie: terapie!, immunoterapie: immunoterapie!, reazioni: reazioni! } satisfies DatiResoconto;
+  }, [pseudo]);
+  const [o, setO] = useState<OpzioniResoconto>(OPZIONI_PREDEFINITE);
+  const [testo, setTesto] = useState<string | null>(null);
+  const generato = dati.dati ? resocontoVisite(visite, dati.dati, o, primaDel) : '';
+  const valore = testo ?? generato;
+  const [campo, setCampo] = useState<keyof Campi>(controllo ? 'anamnesi' : 'anamnesi');
+  const casella = (k: Exclude<keyof OpzioniResoconto, 'piano'>, t: string) => (
+    <label className="flex items-center gap-2"><input type="checkbox" checked={o[k]} onChange={(e) => { setO({ ...o, [k]: e.target.checked }); setTesto(null); }} /> {t}</label>
+  );
+  return (
+    <Finestra titolo="Resoconto delle visite precedenti" onChiudi={onChiudi} larga="xl">
+      {dati.errore && <Errore messaggio={dati.errore} />}
+      <div className="grid gap-4 md:grid-cols-[230px_1fr]">
+        <div className="space-y-1.5 text-sm">
+          <p className="font-medium text-slate-800">Per ogni visita</p>
+          {casella('anamnesi', 'Anamnesi e decorso')}
+          {casella('misure', 'Peso e altezza')}
+          {casella('esame', 'Esame obiettivo')}
+          {casella('test', 'Test eseguiti')}
+          {casella('conclusioni', 'Conclusioni')}
+          {casella('diagnosi', 'Diagnosi')}
+          <label className="block"><span className="block text-slate-500">Piano di cura</span>
+            <select value={o.piano} onChange={(e) => { setO({ ...o, piano: e.target.value as OpzioniResoconto['piano'] }); setTesto(null); }} className={stileInput}>
+              <option value="nessuno">Non includere</option>
+              <option value="farmaci">Solo le prescrizioni (righe «Pr/»)</option>
+              <option value="completo">Completo</option>
+            </select></label>
+          <p className="pt-2 font-medium text-slate-800">Sintesi finale</p>
+          {casella('andamento', 'Andamento punteggi e spirometria')}
+          {casella('positivi', 'Test positivi')}
+          {casella('terapie', 'Terapie e immunoterapia')}
+          {casella('reazioni', 'Reazioni e anafilassi')}
+        </div>
+        <div className="space-y-2">
+          {dati.caricamento ? <Caricamento /> : (
+            <textarea rows={22} value={valore} onChange={(e) => setTesto(e.target.value)} aria-label="Testo del resoconto" className={`${stileInput} font-mono text-[12.5px]`} />
+          )}
+          {testo !== null && <button type="button" onClick={() => setTesto(null)} className="text-xs text-slate-500 underline">Annulla le modifiche e rigenera</button>}
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-sm">Inserisci in{' '}
+              <select value={campo} onChange={(e) => setCampo(e.target.value as keyof Campi)} className="rounded-lg border border-slate-300 px-2 py-1 text-sm">
+                <option value="anamnesi">Anamnesi patologica prossima</option>
+                {controllo && <option value="decorso">Controllo clinico</option>}
+              </select></label>
+            <Bottone variante="primario" disabled={!valore.trim()} onClick={() => onInserisci(valore, campo, 'sostituisci')}>Sostituisci il testo</Bottone>
+            <Bottone disabled={!valore.trim()} onClick={() => onInserisci(valore, campo, 'aggiungi')}>Aggiungi in coda</Bottone>
+          </div>
+          <p className="text-xs text-slate-500">Il testo è modificabile prima dell'inserimento. Nel referto le righe «-» diventano elenchi puntati.</p>
+        </div>
+      </div>
+    </Finestra>
   );
 }
 
@@ -105,10 +208,19 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
   const [anamnesi, setAnamnesi] = useState<CampiCartella | null>(null);
   const valoriCartella: CampiCartella = anamnesi ?? Object.fromEntries(VOCI_CARTELLA.map(([k]) => [k, str(cartella.dati?.[k])])) as CampiCartella;
   const [cartellaAperta, setCartellaAperta] = useState(!visita && !precedente);
+  const [scelte, setScelte] = useState<Scelte | null>(null);
+  const scelteCorrenti = scelte ?? scelteIniziali(cartella.dati?.anamnesi_scelte as Scelte | undefined, cartella.dati as Record<string, string | null> ?? {});
 
   const modelli = useDati(() => q<ModelloAllergo[]>(supabase.schema('anagrafica').from('allergo_modelli').select('*').order('ordine')), []);
   const effettivi = modelliEffettivi(modelli.dati ?? []);
   const [profilo, setProfilo] = useState<string | null>(null);
+  const [resoconto, setResoconto] = useState(false);
+  // Tutte le visite precedenti a questa, dalla più recente.
+  const precedenti = visite.filter((x) => x.id !== visita?.id && (!visita || String(x.data) < String(visita.data)));
+  const [avviso, setAvviso] = useState<string | null>(null);
+  const [modelloEo, setModelloEo] = useState('');
+  const [evidenzia, setEvidenzia] = useState<string | null>(null);
+  const cornice = (campo: string) => `scroll-mt-4 rounded-xl transition-shadow ${evidenzia === campo ? 'ring-4 ring-amber-300' : ''}`;
   const [usati, setUsati] = useState<string[]>(() => (visita?.modelli as string[] | undefined) ?? []);
 
   const [strumento, setStrumento] = useState<null | 'prick' | 'spirometria' | Scala>(null);
@@ -116,22 +228,53 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
   const [invio, setInvio] = useState(false);
   const etaAnni = (Date.parse(f.data) - Date.parse(paziente.data_nascita)) / (365.25 * 86_400_000);
 
-  function inserisci(m: ModelloAllergo) {
+  // Dove finisce ogni modello: il «decorso» va nell'anamnesi se è una prima visita.
+  const campoDi = (m: ModelloAllergo): keyof Campi =>
+    m.sezione === 'decorso' && f.tipo === 'prima_visita' ? 'anamnesi' : m.sezione;
+  const NOMI_CAMPO: Partial<Record<keyof Campi, string>> = {
+    piano: 'Piano di cura', esame_obiettivo: 'Esame obiettivo', conclusioni: 'Conclusioni', anamnesi: 'Anamnesi patologica prossima', decorso: 'Controllo clinico',
+  };
+
+  /** Applica un modello a un insieme di campi; dice se il testo è stato davvero inserito. */
+  function applica(x: Campi, m: ModelloAllergo, modo: 'aggiungi' | 'sostituisci' | 'se_vuoto'): { x: Campi; inserito: boolean } {
     const testo = compila(m.testo, { nome: `${paziente.nome} ${paziente.cognome}`, peso: f.peso_kg || str(ultimoPeso), prossimoControllo: f.prossimo_controllo });
-    const campo: keyof Campi = m.sezione === 'esame_obiettivo' ? 'esame_obiettivo' : m.sezione === 'anamnesi' ? 'anamnesi' : m.sezione;
-    setF((x) => {
-      // Non duplica un blocco già presente; l'esame obiettivo si inserisce solo se vuoto.
-      if (x[campo].includes(testo.slice(0, 60)) || (m.sezione === 'esame_obiettivo' && x.esame_obiettivo.trim())) return x;
-      return { ...x, [campo]: accoda(x[campo], testo) };
-    });
+    const campo = campoDi(m);
+    if (modo === 'sostituisci') return { x: { ...x, [campo]: testo }, inserito: true };
+    if (x[campo].includes(testo.slice(0, 60))) return { x, inserito: false };
+    if (modo === 'se_vuoto' && x[campo].trim()) return { x, inserito: false };
+    return { x: { ...x, [campo]: accoda(x[campo], testo) }, inserito: true };
+  }
+
+  function mostra(campo: keyof Campi, testo: string) {
+    setAvviso(testo);
+    setEvidenzia(campo);
+    window.setTimeout(() => document.getElementById(`sez-${campo}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    window.setTimeout(() => setEvidenzia(null), 2500);
+  }
+
+  function inserisci(m: ModelloAllergo, modo: 'aggiungi' | 'sostituisci' = 'aggiungi') {
+    const r = applica(f, m, modo);
+    const campo = campoDi(m);
+    if (!r.inserito) return mostra(campo, `«${m.nome}» è già presente in ${NOMI_CAMPO[campo]}.`);
+    setF(r.x);
     setUsati((u) => (u.includes(m.codice) ? u : [...u, m.codice]));
+    mostra(campo, `Inserito in «${NOMI_CAMPO[campo]}»: modifica il testo se serve.`);
   }
 
   function applicaPacchetto(codici: string[]) {
+    let x = f;
+    const sezioni = new Set<string>();
+    const nuovi: string[] = [];
     for (const c of codici) {
       const m = effettivi.get(c);
-      if (m) inserisci(m);
+      if (!m) continue;
+      // L'esame obiettivo del modello entra solo se il campo è vuoto (non cancella quanto già scritto).
+      const r = applica(x, m, m.sezione === 'esame_obiettivo' ? 'se_vuoto' : 'aggiungi');
+      if (r.inserito) { x = r.x; sezioni.add(NOMI_CAMPO[campoDi(m)] ?? ''); nuovi.push(m.codice); }
     }
+    setF(x);
+    setUsati((u) => [...new Set([...u, ...nuovi])]);
+    mostra('piano', nuovi.length ? `Inseriti ${nuovi.length} blocchi in: ${[...sezioni].join(', ')}.` : 'I testi di questo modello sono già presenti.');
   }
 
   async function generaTest() {
@@ -148,9 +291,10 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
     setErrore(null);
     setInvio(true);
     try {
-      if (anamnesi) {
+      if (anamnesi || scelte) {
         const { error } = await supabase.schema('clinica').from('allergo_cartelle')
-          .update({ ...Object.fromEntries(Object.entries(anamnesi).map(([k, v]) => [k, v.trim() || null])), aggiornata_il: new Date().toISOString() })
+          .update({ ...Object.fromEntries(Object.entries(valoriCartella).map(([k, v]) => [k, v.trim() || null])),
+                    ...(scelte ? { anamnesi_scelte: scelte } : {}), aggiornata_il: new Date().toISOString() })
           .eq('pseudo_id', pseudo);
         if (error) throw new Error(error.message);
       }
@@ -192,7 +336,7 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
       </div>
       {errore && <Errore messaggio={errore} />}
 
-      <div className={`grid gap-4 ${precedente ? 'lg:grid-cols-[minmax(0,1fr)_340px]' : ''}`}>
+      <div className={`grid gap-4 ${precedenti.length ? 'lg:grid-cols-[minmax(0,1fr)_360px]' : ''}`}>
         <div className="space-y-4">
           {/* Intestazione della visita */}
           <Pannello titolo="Visita">
@@ -231,12 +375,18 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
               <ul className="mt-2 divide-y divide-slate-100 text-sm">
                 {modelliProfilo.map((m) => (
                   <li key={m.codice} className="flex items-center justify-between gap-2 py-1.5">
-                    <span>{m.nome} <span className="text-xs text-slate-400">→ {SEZIONI_MODELLO[m.sezione]}</span>{usati.includes(m.codice) && <span className="ml-1 text-xs text-teal-700">✓ inserito</span>}</span>
-                    <button type="button" onClick={() => inserisci(m)} className="text-xs text-teal-700 underline">Inserisci</button>
+                    <span>{m.nome} <span className="text-xs text-slate-400">→ {NOMI_CAMPO[campoDi(m)] ?? SEZIONI_MODELLO[m.sezione]}</span>{usati.includes(m.codice) && <span className="ml-1 text-xs text-teal-700">✓ inserito</span>}</span>
+                    {m.sezione === 'esame_obiettivo' ? (
+                      <span className="flex gap-3">
+                        <button type="button" onClick={() => inserisci(m, 'sostituisci')} className="text-xs text-teal-700 underline">Sostituisci</button>
+                        <button type="button" onClick={() => inserisci(m)} className="text-xs text-teal-700 underline">Aggiungi</button>
+                      </span>
+                    ) : <button type="button" onClick={() => inserisci(m)} className="text-xs text-teal-700 underline">Inserisci</button>}
                   </li>
                 ))}
               </ul>
             )}
+            {avviso && <p role="status" className="mt-2 rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-900">{avviso}</p>}
             <p className="mt-2 text-xs text-amber-700">I modelli sono testi di partenza: verificare sempre farmaci e posologie in base a età ({Math.floor(etaAnni)} anni) e peso.</p>
           </Pannello>
 
@@ -244,20 +394,23 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
           <Pannello titolo="Anamnesi (dalla cartella)" sottotitolo="Familiare, fisiologica, remota e ambiente: si aggiorna anche la cartella"
                     azione={<button type="button" onClick={() => setCartellaAperta(!cartellaAperta)} className="text-sm text-teal-700 underline">{cartellaAperta ? 'Chiudi' : 'Apri'}</button>}>
             {cartellaAperta ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                {VOCI_CARTELLA.map(([k, t]) => (
-                  <div key={k} className={['anamnesi_familiare', 'anamnesi_fisiologica', 'anamnesi_remota'].includes(k) ? 'md:col-span-2' : ''}>
-                    <Area etichetta={t} valore={valoriCartella[k]} righe={['anamnesi_familiare', 'anamnesi_fisiologica', 'anamnesi_remota'].includes(k) ? 3 : 1}
-                          onChange={(v) => setAnamnesi({ ...valoriCartella, [k]: v })} />
-                  </div>
+              <div className="space-y-3">
+                {VOCI_CARTELLA.filter(([k]) => VOCI_LIBERE.includes(k)).map(([k, t]) => (
+                  <Area key={k} etichetta={t} valore={valoriCartella[k]} righe={k === 'animali' ? 1 : 3}
+                        onChange={(v) => setAnamnesi({ ...valoriCartella, [k]: v })} />
                 ))}
+                {cartella.dati && (
+                  <AnamnesiGuidata scelte={scelteCorrenti} onChange={(nuove, testi) => { setScelte(nuove); setAnamnesi({ ...valoriCartella, ...testi }); }} />
+                )}
               </div>
             ) : (
               <p className="line-clamp-3 text-sm text-slate-600">{VOCI_CARTELLA.filter(([k]) => valoriCartella[k]).map(([k, t]) => `${t}: ${valoriCartella[k]}`).join(' · ') || 'Anamnesi non ancora compilata.'}</p>
             )}
           </Pannello>
 
-          <Pannello titolo={controllo ? 'Controllo clinico' : 'Anamnesi patologica prossima'}>
+          <div id="sez-anamnesi" className={cornice(controllo ? 'decorso' : 'anamnesi')}><span id="sez-decorso" />
+          <Pannello titolo={controllo ? 'Controllo clinico' : 'Anamnesi patologica prossima'}
+                    azione={precedenti.length > 0 ? <Bottone onClick={() => setResoconto(true)}>📋 Resoconto visite precedenti</Bottone> : undefined}>
             <div className="space-y-3">
               {controllo && <Area etichetta={`Controllo clinico del ${giorno(f.data)}`} aiuto="Decorso dall'ultima visita, aderenza, sintomi, reazioni" valore={f.decorso} onChange={(v) => imposta('decorso', v)} />}
               <Area etichetta={controllo ? 'Anamnesi patologica prossima (se aggiornata)' : 'Anamnesi patologica prossima'} valore={f.anamnesi}
@@ -265,7 +418,20 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
             </div>
           </Pannello>
 
-          <Pannello titolo="Esame obiettivo">
+          </div>
+          <div id="sez-esame_obiettivo" className={cornice('esame_obiettivo')}>
+          <Pannello titolo="Esame obiettivo" sottotitolo="Il peso si scrive nel suo campo: nel referto compare accanto al titolo"
+                    azione={
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select value={modelloEo} onChange={(e) => setModelloEo(e.target.value)} aria-label="Modello di esame obiettivo" className="rounded-lg border border-slate-300 px-2 py-1 text-sm">
+                          <option value="">Modello per patologia…</option>
+                          {[...effettivi.values()].filter((m) => m.sezione === 'esame_obiettivo').sort((a, b) => a.ordine - b.ordine)
+                            .map((m) => <option key={m.codice} value={m.codice}>{m.nome}</option>)}
+                        </select>
+                        <Bottone disabled={!modelloEo} onClick={() => { const m = effettivi.get(modelloEo); if (m) inserisci(m, 'sostituisci'); }}>Sostituisci</Bottone>
+                        <Bottone disabled={!modelloEo} onClick={() => { const m = effettivi.get(modelloEo); if (m) inserisci(m); }}>Aggiungi</Bottone>
+                      </div>
+                    }>
             <div className="grid gap-3 md:grid-cols-3">
               <label className="text-sm"><span className="block text-slate-500">Peso (kg){ultimoPeso != null && !f.peso_kg ? ` · ultimo ${String(ultimoPeso).replace('.', ',')}` : ''}</span>
                 <input inputMode="decimal" value={f.peso_kg} onChange={(e) => imposta('peso_kg', e.target.value)} className={stileInput} /></label>
@@ -277,6 +443,7 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
             </div>
           </Pannello>
 
+          </div>
           <Pannello titolo="Test eseguiti" sottotitolo="Registra i test della giornata, poi genera il testo del referto"
                     azione={<div className="flex flex-wrap gap-1">
                       <Bottone onClick={() => setStrumento('prick')}>Prick test</Bottone>
@@ -287,6 +454,7 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
             <button type="button" onClick={() => void generaTest()} className="mt-1 text-sm text-teal-700 underline">Genera dai test registrati il {giorno(f.data.slice(0, 10))}</button>
           </Pannello>
 
+          <div id="sez-conclusioni" className={cornice('conclusioni')}>
           <Pannello titolo="Conclusioni e diagnosi">
             <div className="space-y-3">
               <Area etichetta="Conclusioni" valore={f.conclusioni} onChange={(v) => imposta('conclusioni', v)} />
@@ -294,11 +462,14 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
             </div>
           </Pannello>
 
+          </div>
+          <div id="sez-piano" className={cornice('piano')}>
           <Pannello titolo="Piano di cura">
             <Area etichetta="Indicazioni e terapia" aiuto="Le righe che iniziano con «-» diventano un elenco puntato nel referto" valore={f.piano} righe={16} onChange={(v) => imposta('piano', v)} />
             <label className="mt-3 block w-56 text-sm"><span className="block text-slate-500">Prossimo controllo</span>
               <input type="date" min={oggi()} value={f.prossimo_controllo} onChange={(e) => imposta('prossimo_controllo', e.target.value)} className={stileInput} /></label>
           </Pannello>
+          </div>
 
           <div className="flex justify-end gap-2">
             <Bottone onClick={onChiudi}>Annulla</Bottone>
@@ -306,10 +477,32 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
           </div>
         </div>
 
-        {precedente && <VisitaPrecedente v={precedente} prima={prima} onRiprendi={(campo, testo) => { if (!f[campo].includes(testo)) imposta(campo, accoda(f[campo], testo)); }} />}
+        {precedenti.length > 0 && (
+          <VisitaPrecedente precedenti={precedenti} prima={prima} controllo={controllo} onResoconto={() => setResoconto(true)}
+            onImporta={(voci, modo) => {
+              setF((x) => {
+                let y = x;
+                for (const v of voci) {
+                  if (modo === 'sostituisci') y = { ...y, [v.campo]: v.testo };
+                  else if (!y[v.campo].includes(v.testo.trim())) y = { ...y, [v.campo]: accoda(y[v.campo], v.testo) };
+                }
+                return y;
+              });
+              mostra(voci[0]!.campo, voci.length > 1 ? `Importate ${voci.length} sezioni dalla visita precedente.` : `Importato «${voci[0]!.titolo}» ${modo === 'sostituisci' ? '(sostituito)' : ''}.`);
+            }} />
+        )}
       </div>
     </form>
 
+      {resoconto && (
+        <FinestraResoconto pseudo={pseudo} visite={precedenti} primaDel={visita ? String(visita.data) : new Date(f.data).toISOString()} controllo={controllo}
+          onChiudi={() => setResoconto(false)}
+          onInserisci={(testo, campo, modo) => {
+            setResoconto(false);
+            setF((x) => ({ ...x, [campo]: modo === 'sostituisci' ? testo : accoda(x[campo], testo) }));
+            mostra(campo, 'Resoconto inserito: rileggi e completa il testo.');
+          }} />
+      )}
       {strumento === 'prick' && (
         <Finestra titolo="Seduta di prick test" onChiudi={() => setStrumento(null)} larga>
           <PannelloPrick pseudo={pseudo} dataIniziale={f.data.slice(0, 10)} onFatto={() => { setStrumento(null); void generaTest(); }} />

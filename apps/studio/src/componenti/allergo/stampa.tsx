@@ -138,6 +138,7 @@ export function RefertoVisita({ impostazioni, studio, paziente, codiceFiscale, v
         {voce('Farmaci', anamnesi.farmaci)}
         {voce('Alimentazione', anamnesi.alimentazione)}
         {voce('Sport', anamnesi.sport)}
+        {voce('Sonno', anamnesi.sonno)}
       </div>
 
       {controllo && (

@@ -149,13 +149,8 @@ export const CAMPI_CARTELLA: Campo[] = [
   { nome: 'anamnesi_familiare', etichetta: 'Anamnesi familiare', tipo: 'area', segnaposto: 'Es. madre: asma allergico; nonna materna: rinite allergica' },
   { nome: 'anamnesi_fisiologica', etichetta: 'Anamnesi fisiologica', tipo: 'area', segnaposto: 'Gravidanza, parto, PN, eventi perinatali, allattamento, divezzamento' },
   { nome: 'anamnesi_remota', etichetta: 'Anamnesi patologica remota', tipo: 'area', segnaposto: 'Bronchiolite, dermatite atopica, ricoveri, interventi…' },
-  { nome: 'abitazione', etichetta: 'Abitazione', tipo: 'testo', segnaposto: 'Es. in campagna, asciutta' },
-  { nome: 'animali', etichetta: 'Animali domestici', tipo: 'testo' },
-  { nome: 'fumo_dettaglio', etichetta: 'Fumo passivo', tipo: 'testo', segnaposto: 'Es. SI (padre e madre)' },
-  { nome: 'muffe_umidita', etichetta: 'Muffe o umidità in casa', tipo: 'si_no' },
-  { nome: 'farmaci', etichetta: 'Farmaci (reazioni avverse)', tipo: 'testo', segnaposto: 'Es. ben tollerati i farmaci finora assunti' },
-  { nome: 'alimentazione', etichetta: 'Alimentazione (reazioni ad alimenti)', tipo: 'area' },
-  { nome: 'sport', etichetta: 'Sport', tipo: 'testo' },
+  // Abitazione, fumo passivo, alimentazione, farmaci, sport e sonno: menu guidati (AnamnesiGuidata).
+  { nome: 'animali', etichetta: 'Animali domestici', tipo: 'testo', segnaposto: 'Es. un cane fuori casa' },
   { nome: 'comunita', etichetta: 'Comunità', tipo: 'testo', segnaposto: 'Nido, scuola' },
   { nome: 'note', etichetta: 'Note', tipo: 'area' },
 ];

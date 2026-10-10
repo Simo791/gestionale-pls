@@ -4,6 +4,7 @@ import { q, useDati } from '../../lib/dati';
 import { supabase } from '../../lib/supabase';
 import Finestra from '../Finestra';
 import { Badge, Bottone, Caricamento, Errore, Pannello } from '../ui';
+import ImmaginiScorad from './ImmaginiScorad';
 import { PACCHETTI, PROFILI, SEZIONI_MODELLO, type ImpostazioniReferto, type ModelloAllergo } from './referto';
 import { stileInput } from './Registro';
 
@@ -152,6 +153,7 @@ export function PannelloImpostazioni({ claims }: { claims: ClaimsApp }) {
     <div className="space-y-6">
       <Pannello titolo="Referto" sottotitolo="Intestazione, luogo, firma e contatti stampati nei referti"><ImpostazioniRefertoForm claims={claims} /></Pannello>
       <Pannello titolo="Modelli di testo" sottotitolo="Per tipo di bambino allergico: esame obiettivo, conclusioni, piano di cura"><GestioneModelli claims={claims} /></Pannello>
+      <Pannello titolo="Immagini di riferimento SCORAD" sottotitolo="Una foto per ogni grado (1–3) dei sei segni di intensità"><ImmaginiScorad claims={claims} /></Pannello>
     </div>
   );
 }

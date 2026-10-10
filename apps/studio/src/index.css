@@ -16,6 +16,12 @@
   .documento-stampa {
     display: block;
   }
+  /* Colori e sfondi dei referti grafici anche in stampa / PDF */
+  .documento-stampa,
+  .documento-stampa * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   html,
   body {
     background: #ffffff !important;

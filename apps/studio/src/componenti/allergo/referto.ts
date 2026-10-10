@@ -44,10 +44,10 @@ export interface Pacchetto { codice: string; nome: string; descrizione: string; 
 
 export const PACCHETTI: Pacchetto[] = [
   { codice: 'asma_bambino', nome: 'Bambino con asma (< 12 anni)', descrizione: 'Broncospasmo para-infettivo o da sforzo, piano d\'azione con salbutamolo e ICS',
-    modelli: ['eo_normale', 'asma_conclusioni', 'diario', 'fumo', 'profilassi_acari', 'asma_piano_azione', 'asma_fondo_ics', 'asma_controllo_spiro'],
+    modelli: ['asma_eo', 'asma_conclusioni', 'diario', 'fumo', 'profilassi_acari', 'asma_piano_azione', 'asma_fondo_ics', 'asma_controllo_spiro'],
     strumenti: ['prick', 'spirometria', 'c_act'] },
   { codice: 'asma_ragazzo', nome: 'Ragazzo con asma (≥ 12 anni)', descrizione: 'Terapia di fondo e al bisogno con budesonide/formoterolo (MART)',
-    modelli: ['eo_normale', 'asma_conclusioni', 'diario', 'profilassi_acari', 'asma_mart', 'rinite', 'asma_vaccino', 'asma_controllo_spiro'],
+    modelli: ['asma_eo', 'asma_conclusioni', 'diario', 'profilassi_acari', 'asma_mart', 'rinite', 'asma_vaccino', 'asma_controllo_spiro'],
     strumenti: ['prick', 'spirometria', 'act'] },
   { codice: 'rinite', nome: 'Rinocongiuntivite allergica', descrizione: 'Antistaminico, steroide nasale, collirio a gradini; profilassi ambientale',
     modelli: ['rinite_eo', 'diario', 'fumo', 'profilassi_pollini', 'profilassi_acari', 'rinite', 'orl', 'controllo'],
@@ -55,17 +55,17 @@ export const PACCHETTI: Pacchetto[] = [
   { codice: 'dermatite', nome: 'Dermatite atopica', descrizione: 'Educazione, emollienti, terapia delle lesioni accese, prurito',
     modelli: ['dermatite_eo', 'dermatite', 'dermatite_controllo'], strumenti: ['scorad', 'poem'] },
   { codice: 'anafilassi_alimenti', nome: 'Allergia alimentare con anafilassi', descrizione: 'Evitamento rigoroso, autoiniettore × 2, piano d\'azione',
-    modelli: ['eo_normale', 'anafilassi_conclusioni', 'diario', 'alimenti_anafilassi', 'controllo'], strumenti: ['prick', 'ige'] },
+    modelli: ['alimenti_eo', 'anafilassi_conclusioni', 'diario', 'alimenti_anafilassi', 'controllo'], strumenti: ['prick', 'ige'] },
   { codice: 'crostacei', nome: 'Allergia a crostacei e molluschi', descrizione: 'Anche vapori di cottura; autoiniettore e piano d\'azione',
-    modelli: ['eo_normale', 'anafilassi_conclusioni', 'diario', 'fumo', 'crostacei_molluschi', 'alimenti_anafilassi', 'controllo'], strumenti: ['prick', 'ige'] },
+    modelli: ['alimenti_eo', 'anafilassi_conclusioni', 'diario', 'fumo', 'crostacei_molluschi', 'alimenti_anafilassi', 'controllo'], strumenti: ['prick', 'ige'] },
   { codice: 'alimenti', nome: 'Allergia alimentare senza anafilassi', descrizione: 'Dieta di esclusione e rivalutazione per la reintroduzione',
-    modelli: ['eo_normale', 'diario', 'alimenti_dieta', 'controllo'], strumenti: ['prick', 'ige'] },
+    modelli: ['alimenti_eo', 'diario', 'alimenti_dieta', 'controllo'], strumenti: ['prick', 'ige'] },
   { codice: 'pollini_alimenti', nome: 'Sindrome orale allergica (LTP / PR-10 / profilline)', descrizione: 'Gestione dei panallergeni e della rinite',
-    modelli: ['eo_normale', 'diario', 'profilassi_pollini', 'ltp_pr10_profilina', 'rinite', 'controllo'], strumenti: ['prick', 'ige'] },
+    modelli: ['pollini_alimenti_eo', 'diario', 'profilassi_pollini', 'ltp_pr10_profilina', 'rinite', 'controllo'], strumenti: ['prick', 'ige'] },
   { codice: 'immunoterapia', nome: 'Controllo in immunoterapia', descrizione: 'Aderenza, effetti collaterali, rinnovo del piano terapeutico',
     modelli: ['decorso_benessere', 'eo_normale', 'diario', 'ait', 'rinite', 'controllo'], strumenti: [] },
   { codice: 'orticaria', nome: 'Orticaria', descrizione: 'Antistaminico, diario dei fattori scatenanti, UAS7',
-    modelli: ['eo_normale', 'diario', 'orticaria', 'controllo'], strumenti: ['uas7'] },
+    modelli: ['orticaria_eo', 'diario', 'orticaria', 'controllo'], strumenti: ['uas7'] },
 ];
 
 /** Modelli effettivi: quelli dello studio sostituiscono il predefinito con lo stesso codice. */

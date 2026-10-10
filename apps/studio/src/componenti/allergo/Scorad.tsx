@@ -1,6 +1,20 @@
 import { estensioneScorad, GRADI_INTENSITA, REGIONI_SCORAD, scorad, VOCI_INTENSITA_SCORAD, type InputScorad } from '@pls/shared';
 import { useState } from 'react';
+import { q, useDati } from '../../lib/dati';
+import { supabase } from '../../lib/supabase';
 import { Badge } from '../ui';
+
+export interface ImmagineScorad { id?: string; voce: number; grado: number; immagine: string; didascalia: string | null; fonte: string }
+
+/** Descrizione dei gradi 1–3 per ciascuno dei sei segni (guida alla valutazione). */
+export const DESCRIZIONI_GRADI: string[][] = [
+  ['rosa tenue, appena percettibile', 'rosso netto', 'rosso intenso, violaceo'],
+  ['lieve rilievo palpabile', 'papule ben evidenti, edema definito', 'edema marcato, papule confluenti'],
+  ['tracce di essudato, croste sottili', 'essudazione e croste evidenti', 'essudazione diffusa, croste spesse'],
+  ['poche escoriazioni superficiali', 'escoriazioni multiple', 'escoriazioni diffuse e profonde, sanguinanti'],
+  ['lieve ispessimento, pieghe accentuate', 'ispessimento evidente', 'cute spessa con pieghe marcate'],
+  ['secchezza lieve', 'secchezza con desquamazione', 'xerosi marcata, desquamazione e fissurazioni'],
+];
 
 /**
  * Calcolatore SCORAD sul modello di eSCORAD (dermatools): età, mappa corporea fronte/retro
@@ -69,10 +83,24 @@ function Sagoma({ lato, stato, scelta, onScegli }: { lato: 'fronte' | 'retro'; s
   );
 }
 
+/** Mappa corporea statica (per i referti): regioni colorate per % interessata. */
+export function MappaCorporea({ regioni, lato, altezza = 120 }: { regioni: Record<string, number>; lato: 'fronte' | 'retro'; altezza?: number }) {
+  return (
+    <svg viewBox="0 0 120 250" style={{ height: altezza, width: 'auto' }} role="img" aria-label={`Estensione della dermatite, ${lato}`}>
+      {REGIONI_SCORAD.filter((r) => r.lato === lato).map((r) => (
+        <path key={r.codice} d={forma(r.codice)} fill={colore(regioni[r.codice] ?? 0)} stroke="#64748b" strokeWidth={1} />
+      ))}
+    </svg>
+  );
+}
+
 const PASSI = [0, 10, 25, 50, 75, 100];
 
 export default function Scorad({ stato, onChange }: { stato: StatoScorad; onChange: (s: StatoScorad) => void }) {
   const [scelta, setScelta] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<ImmagineScorad | null>(null);
+  const caricate = useDati(() => q<ImmagineScorad[]>(supabase.schema('anagrafica').from('allergo_scorad_immagini').select('voce, grado, immagine, didascalia, fonte')), []);
+  const immagini = new Map((caricate.dati ?? []).map((x) => [`${x.voce}-${x.grado}`, x]));
   const regione = REGIONI_SCORAD.find((r) => r.codice === scelta);
   const input = comeInputScorad(stato);
   const r = scorad(input);
@@ -130,18 +158,29 @@ export default function Scorad({ stato, onChange }: { stato: StatoScorad; onChan
       {/* B: intensità */}
       <section>
         <h3 className="font-semibold text-slate-900">B · Intensità <span className="font-normal text-slate-500">— su un'area rappresentativa media; la xerosi si valuta sulla cute non lesionata</span></h3>
-        <div className="mt-2 space-y-1.5">
+        <div className="mt-2 space-y-3">
           {VOCI_INTENSITA_SCORAD.map((voce, i) => (
-            <div key={voce} className="flex flex-wrap items-center gap-2">
-              <span className="w-44 text-slate-700">{voce}</span>
-              <div className="flex gap-1" role="radiogroup" aria-label={voce}>
-                {GRADI_INTENSITA.map((g, v) => (
-                  <button key={g} type="button" role="radio" aria-checked={stato.intensita[i] === v}
-                          onClick={() => onChange({ ...stato, intensita: stato.intensita.map((x, j) => (j === i ? v : x)) })}
-                          className={`rounded-lg border px-2 py-1 ${stato.intensita[i] === v ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-300 bg-white text-slate-700'}`}>
-                    {v} · {g.toLowerCase()}
-                  </button>
-                ))}
+            <div key={voce}>
+              <p className="mb-1 text-slate-800">{voce}</p>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4" role="radiogroup" aria-label={voce}>
+                {GRADI_INTENSITA.map((g, v) => {
+                  const foto = immagini.get(`${i}-${v}`);
+                  const scelto = stato.intensita[i] === v;
+                  return (
+                    <div key={g} className={`rounded-lg border p-1.5 ${scelto ? 'border-teal-700 bg-teal-50 ring-1 ring-teal-700' : 'border-slate-200 bg-white'}`}>
+                      <button type="button" role="radio" aria-checked={scelto} className="w-full text-left"
+                              onClick={() => onChange({ ...stato, intensita: stato.intensita.map((x, j) => (j === i ? v : x)) })}>
+                        <span className={`font-medium ${scelto ? 'text-teal-800' : 'text-slate-800'}`}>{v} · {g.toLowerCase()}</span>
+                        {v > 0 && <span className="block text-xs leading-snug text-slate-500">{DESCRIZIONI_GRADI[i]?.[v - 1]}</span>}
+                      </button>
+                      {foto && (
+                        <button type="button" onClick={() => setZoom(foto)} className="mt-1 block w-full" aria-label={`Immagine di riferimento: ${voce} grado ${v}`}>
+                          <img src={foto.immagine} alt={`${voce}, grado ${v}`} className="h-16 w-full rounded object-cover" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -178,6 +217,18 @@ export default function Scorad({ stato, onChange }: { stato: StatoScorad; onChan
         <p className="mt-1 flex justify-between text-xs text-slate-500"><span>0 · lieve &lt; 25</span><span>moderata 25–50</span><span>grave &gt; 50 · 103</span></p>
         <p className="mt-2 text-xs text-slate-500">A {input.estensione}/{stato.sotto2anni ? 96 : 100} · B {b}/18 · C {c}/20. Fasce: Oranje 2007 (oggettivo: Kunz 1997).</p>
       </section>
+      {zoom && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4" onClick={() => setZoom(null)} role="dialog" aria-modal="true">
+          <figure className="max-w-3xl rounded-xl bg-white p-3" onClick={(e) => e.stopPropagation()}>
+            <img src={zoom.immagine} alt={zoom.didascalia ?? 'Immagine di riferimento'} className="max-h-[75vh] w-auto rounded" />
+            <figcaption className="mt-2 text-sm text-slate-700">
+              {VOCI_INTENSITA_SCORAD[zoom.voce]} · grado {zoom.grado} ({GRADI_INTENSITA[zoom.grado]?.toLowerCase()}){zoom.didascalia ? ` — ${zoom.didascalia}` : ''}
+              <span className="block text-xs text-slate-500">Fonte: {zoom.fonte}</span>
+            </figcaption>
+            <button type="button" onClick={() => setZoom(null)} className="mt-2 text-sm text-teal-700 underline">Chiudi</button>
+          </figure>
+        </div>
+      )}
     </div>
   );
 }

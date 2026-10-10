@@ -10,6 +10,9 @@ import Registro, { CampoModulo, comeRiga, comeValori, giorno, oggi, s, stileInpu
 import { DietaEsclusione, DocumentoAllergo, firmatarioDa, PianoAnafilassi, RefertoVisita, RiepilogoAllergo, type ContattoEmergenza } from '../componenti/allergo/stampa';
 import type { ImpostazioniReferto } from '../componenti/allergo/referto';
 import VisitaAllergologica from '../componenti/allergo/VisitaAllergologica';
+import { RefertoGrafico } from '../componenti/allergo/RefertoGrafico';
+import AnamnesiGuidata from '../componenti/allergo/ModuloAnamnesi';
+import { scelteIniziali, type Scelte, type TestiAnamnesi } from '../componenti/allergo/anamnesiTesti';
 import Terapie from '../componenti/allergo/Terapie';
 import TestAllergologici from '../componenti/allergo/TestAllergologici';
 import Finestra from '../componenti/Finestra';
@@ -81,14 +84,18 @@ export default function SchedaAllergologica({ id, claims }: { id: string; claims
     stampa(<DocumentoAllergo titolo={titolo} studio={studio.dati} firmatario={firmatarioDa(io.dati)} paziente={p} codiceFiscale={codice}>{contenuto}</DocumentoAllergo>);
   }
 
-  async function stampaReferto(v: RigaAllergo) {
+  async function stampaReferto(v: RigaAllergo, grafico = true) {
     const codice = cf ?? (await leggiCf());
     const visite = t?.visite ?? [];
     const prima = [...visite].reverse().find((x) => x.tipo === 'prima_visita') ?? visite[visite.length - 1] ?? null;
     let anamnesi = (v.anamnesi_snapshot as Record<string, unknown> | null) ?? null;
     if (!anamnesi) anamnesi = await q<Record<string, unknown>>(supabase.schema('clinica').from('allergo_cartelle').select('*').eq('pseudo_id', ps).single());
-    stampa(<RefertoVisita impostazioni={impostazioni.dati ?? null} studio={studio.dati} paziente={p} codiceFiscale={codice}
-                          visita={v} anamnesi={anamnesi} prima={prima} />);
+    stampa(grafico
+      ? <RefertoGrafico impostazioni={impostazioni.dati ?? null} studio={studio.dati} paziente={p} codiceFiscale={codice}
+                        visita={v} anamnesi={anamnesi} prima={prima}
+                        dati={{ test: t?.test ?? [], spirometrie: t?.spirometrie ?? [], punteggi: t?.punteggi ?? [] }} />
+      : <RefertoVisita impostazioni={impostazioni.dati ?? null} studio={studio.dati} paziente={p} codiceFiscale={codice}
+                       visita={v} anamnesi={anamnesi} prima={prima} />);
   }
 
   const terapieInCorso = (t?.terapie ?? []).filter((x) => !x.al || String(x.al) >= oggiIso());
@@ -145,7 +152,7 @@ export default function SchedaAllergologica({ id, claims }: { id: string; claims
       )}
       {scheda === 'visite' && !editor && (
         <div className="space-y-6">
-          <ElencoVisite visite={t?.visite ?? []} onApri={setEditor} onStampa={(v) => void stampaReferto(v)} />
+          <ElencoVisite visite={t?.visite ?? []} onApri={setEditor} onStampa={(v, grafico) => void stampaReferto(v, grafico)} />
           <Registro titolo="Diagnosi" tabella="allergo_diagnosi" pseudo={ps} campi={CAMPI_DIAGNOSI} ordine="creato_il" onCambio={cambia}
             iniziali={() => ({ stato: 'attiva', data_diagnosi: oggi() })} trasforma={(r) => ({ ...r, aggiornato_il: new Date().toISOString() })}
             riassunto={(r) => (
@@ -227,7 +234,7 @@ export default function SchedaAllergologica({ id, claims }: { id: string; claims
   );
 }
 
-function ElencoVisite({ visite, onApri, onStampa }: { visite: RigaAllergo[]; onApri: (v: RigaAllergo | 'nuova') => void; onStampa: (v: RigaAllergo) => void }) {
+function ElencoVisite({ visite, onApri, onStampa }: { visite: RigaAllergo[]; onApri: (v: RigaAllergo | 'nuova') => void; onStampa: (v: RigaAllergo, grafico: boolean) => void }) {
   return (
     <Pannello titolo="Visite" sottotitolo="Referti nel formato dell'ambulatorio; nel controllo si richiama sempre la visita precedente"
               azione={<Bottone variante="primario" onClick={() => onApri('nuova')}>{visite.length ? '+ Controllo clinico' : '+ Prima visita'}</Bottone>}>
@@ -248,7 +255,8 @@ function ElencoVisite({ visite, onApri, onStampa }: { visite: RigaAllergo[]; onA
               </div>
               <div className="flex gap-2">
                 <Bottone onClick={() => onApri(v)}>Apri</Bottone>
-                <Bottone onClick={() => onStampa(v)}>Stampa referto</Bottone>
+                <Bottone variante="primario" onClick={() => onStampa(v, true)}>Referto a colori</Bottone>
+                <Bottone onClick={() => onStampa(v, false)}>Referto classico</Bottone>
               </div>
             </li>
           ))}
@@ -435,26 +443,33 @@ function ModificaDati({ p, onFatto }: { p: AllergoPaziente; onFatto: () => void 
 function Anamnesi({ pseudo }: { pseudo: string }) {
   const cartella = useDati(() => q<Record<string, unknown>>(supabase.schema('clinica').from('allergo_cartelle').select('*').eq('pseudo_id', pseudo).single()), [pseudo]);
   const [v, setV] = useState<Valori | null>(null);
+  const [guidata, setGuidata] = useState<{ scelte: Scelte; testi: TestiAnamnesi } | null>(null);
   const [esito, setEsito] = useState<{ ok: boolean; testo: string } | null>(null);
 
   if (cartella.errore) return <Errore messaggio={cartella.errore} />;
   if (!cartella.dati) return <Caricamento />;
   const valori: Valori = v ?? comeValori(CAMPI_CARTELLA, cartella.dati);
+  const scelte = guidata?.scelte ?? scelteIniziali(cartella.dati.anamnesi_scelte as Scelte | undefined, cartella.dati as Record<string, string | null>);
 
   async function salva(e: FormEvent) {
     e.preventDefault();
+    const testi = guidata ? Object.fromEntries(Object.entries(guidata.testi).map(([k, x]) => [k, x.trim() || null])) : {};
     const { error } = await supabase.schema('clinica').from('allergo_cartelle')
-      .update({ ...comeRiga(CAMPI_CARTELLA, valori), aggiornata_il: new Date().toISOString() }).eq('pseudo_id', pseudo);
+      .update({ ...comeRiga(CAMPI_CARTELLA, valori), ...testi, ...(guidata ? { anamnesi_scelte: guidata.scelte } : {}), aggiornata_il: new Date().toISOString() })
+      .eq('pseudo_id', pseudo);
     setEsito(error ? { ok: false, testo: error.message } : { ok: true, testo: 'Anamnesi salvata.' });
     if (!error) cartella.ricarica();
   }
 
   return (
     <Pannello titolo="Anamnesi allergologica" sottotitolo="Le stesse voci del referto: compaiono in ogni visita e si aggiornano anche dalla visita">
-      <form onSubmit={(e) => void salva(e)} className="grid gap-3 md:grid-cols-2">
-        {esito && <p className={`md:col-span-2 rounded-lg p-2 text-sm ${esito.ok ? 'bg-emerald-50 text-emerald-900' : 'bg-red-50 text-red-900'}`}>{esito.testo}</p>}
-        {CAMPI_CARTELLA.map((campo) => <CampoModulo key={campo.nome} c={campo} v={valori} onChange={(x) => { setV(x); setEsito(null); }} />)}
-        <div className="md:col-span-2"><Bottone type="submit" variante="primario">Salva anamnesi</Bottone></div>
+      <form onSubmit={(e) => void salva(e)} className="space-y-4">
+        {esito && <p className={`rounded-lg p-2 text-sm ${esito.ok ? 'bg-emerald-50 text-emerald-900' : 'bg-red-50 text-red-900'}`}>{esito.testo}</p>}
+        <div className="grid gap-3 md:grid-cols-2">
+          {CAMPI_CARTELLA.map((campo) => <CampoModulo key={campo.nome} c={campo} v={valori} onChange={(x) => { setV(x); setEsito(null); }} />)}
+        </div>
+        <AnamnesiGuidata scelte={scelte} onChange={(s2, testi) => { setGuidata({ scelte: s2, testi }); setEsito(null); }} />
+        <Bottone type="submit" variante="primario">Salva anamnesi</Bottone>
       </form>
     </Pannello>
   );

@@ -105,3 +105,18 @@ piano di cura, controllo, frase di contatto e firma.
   sonno, risultato A/B/C, SCORAD e SCORAD oggettivo con fasce.
 - **Piano d'azione per la reazione allergica** nel formato dell'ambulatorio: tabella sintomi → adrenalina/antistaminico,
   dosaggio, chi chiamare (112), contatti di emergenza, istruzioni per l'autoiniettore.
+
+## Referto a colori (per bambini e famiglie)
+
+Dalla lista visite: «Referto a colori» oppure «Referto classico» (testo, come le lettere).
+Il referto a colori ha sezioni colorate con icone, scheda del bambino, riquadri «in breve» (peso, altezza,
+saturazione, prossimo controllo) e i dati della giornata schematizzati:
+- **prick test**: barre del pomfo in mm, soglia di positività (controllo negativo + 3 mm), istamina e controllo
+  negativo distinti, positivi evidenziati;
+- **IgE specifiche/molecolari**: scala logaritmica con le classi 0–5;
+- **spirometria**: FEV₁, FVC, FEV₁/FVC (soglie diverse sotto/sopra i 12 anni), FEF₂₅₋₇₅ su fasce colorate,
+  broncoreversibilità prima/dopo (positiva ≥ 12%), FeNO con soglie ATS per età;
+- **punteggi** (c-ACT, ACT, SCORAD con mappa corporea, POEM, UAS7): barra con fasce, valore, giudizio e andamento
+  delle ultime misure;
+- piano di cura con righe evidenziate (✅ migliora, ❌ non migliora, ➡ attenzione) e diagnosi a etichette.
+Gli stati usano sempre colore + scritta. In stampa i colori sono mantenuti (`print-color-adjust: exact`).
