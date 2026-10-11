@@ -31,7 +31,7 @@ select ok((select count(*) from api.consensi_incompleti()
   'segreteria: Sofia risulta con consensi incompleti');
 select is((select mancanti from api.consensi_incompleti()
            where paziente_id = 'd0000000-0000-4000-8000-000000000002'
-             and finalita = 'portale'), array['Marco Bianchi'],
+             and finalita = 'dati_sanitari'), array['Marco Bianchi'],
   'consensi incompleti: indica il genitore che manca');
 select throws_ok($$ select * from api.attivita_recente() $$, 'P0001', null,
   'segreteria: non consulta il registro attività');
@@ -66,8 +66,8 @@ select pg_temp.come('b0000000-0000-4000-8000-000000000001', 'tutore', null);
 set local role authenticated;
 select throws_ok($$ select * from api.consensi_incompleti() $$, 'P0001', null,
   'genitore: non accede alle funzioni dello staff');
-select is(jsonb_array_length(api.portale_storico_figlio('d0000000-0000-4000-8000-000000000001') -> 'vaccini'), 1,
-  'madre: vede il libretto vaccinale di Luca (dal portale)');
+select is((select count(*)::int from clinica.vaccinazioni), 0,
+  'genitore: nessun accesso diretto al libretto vaccinale');
 reset role;
 
 select * from finish();

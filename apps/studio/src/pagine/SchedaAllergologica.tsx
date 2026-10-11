@@ -16,6 +16,7 @@ import { scelteIniziali, type Scelte, type TestiAnamnesi } from '../componenti/a
 import Terapie from '../componenti/allergo/Terapie';
 import TestAllergologici from '../componenti/allergo/TestAllergologici';
 import Finestra from '../componenti/Finestra';
+import InviaDocumenti from '../componenti/InviaDocumenti';
 import { useStampa } from '../componenti/Stampa';
 import { Badge, Bottone, Caricamento, Errore, Pannello, Vuoto } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
@@ -64,6 +65,7 @@ export default function SchedaAllergologica({ id, claims }: { id: string; claims
   const io = useDati(() => q<MembroStudio | null>(supabase.schema('anagrafica').from('membri_studio').select('*').eq('utente_id', claims.sub).maybeSingle()), [claims.sub]);
   const cambia = () => setVersione((v) => v + 1);
   const [editor, setEditor] = useState<RigaAllergo | 'nuova' | null>(null);
+  const [invio, setInvio] = useState<RigaAllergo | null>(null);
   const impostazioni = useDati(() => q<ImpostazioniReferto | null>(supabase.schema('anagrafica').from('allergo_impostazioni').select('*').eq('utente_id', claims.sub).maybeSingle()), [claims.sub]);
 
   if (paziente.errore || pseudo.errore) return <Errore messaggio={paziente.errore ?? pseudo.errore ?? ''} />;
@@ -84,19 +86,24 @@ export default function SchedaAllergologica({ id, claims }: { id: string; claims
     stampa(<DocumentoAllergo titolo={titolo} studio={studio.dati} firmatario={firmatarioDa(io.dati)} paziente={p} codiceFiscale={codice}>{contenuto}</DocumentoAllergo>);
   }
 
-  async function stampaReferto(v: RigaAllergo, grafico = true) {
+  /** Referto della visita (a colori o classico): lo stesso per la stampa e per l'invio. */
+  async function elementoReferto(v: RigaAllergo, grafico = true): Promise<ReactElement> {
     const codice = cf ?? (await leggiCf());
     const visite = t?.visite ?? [];
     const prima = [...visite].reverse().find((x) => x.tipo === 'prima_visita') ?? visite[visite.length - 1] ?? null;
     let anamnesi = (v.anamnesi_snapshot as Record<string, unknown> | null) ?? null;
     if (!anamnesi) anamnesi = await q<Record<string, unknown>>(supabase.schema('clinica').from('allergo_cartelle').select('*').eq('pseudo_id', ps).single());
-    stampa(grafico
+    return (grafico
       ? <RefertoGrafico impostazioni={impostazioni.dati ?? null} studio={studio.dati} paziente={p} codiceFiscale={codice}
                         visita={v} anamnesi={anamnesi} prima={prima}
                         dati={{ test: t?.test ?? [], spirometrie: t?.spirometrie ?? [], punteggi: t?.punteggi ?? [] }} />
       : <RefertoVisita impostazioni={impostazioni.dati ?? null} studio={studio.dati} paziente={p} codiceFiscale={codice}
                        visita={v} anamnesi={anamnesi} prima={prima}
                        dati={{ test: t?.test ?? [], spirometrie: t?.spirometrie ?? [], punteggi: t?.punteggi ?? [] }} />);
+  }
+
+  async function stampaReferto(v: RigaAllergo, grafico = true) {
+    stampa(await elementoReferto(v, grafico));
   }
 
   const terapieInCorso = (t?.terapie ?? []).filter((x) => !x.al || String(x.al) >= oggiIso());
@@ -153,7 +160,7 @@ export default function SchedaAllergologica({ id, claims }: { id: string; claims
       )}
       {scheda === 'visite' && !editor && (
         <div className="space-y-6">
-          <ElencoVisite visite={t?.visite ?? []} onApri={setEditor} onStampa={(v, grafico) => void stampaReferto(v, grafico)} />
+          <ElencoVisite visite={t?.visite ?? []} onApri={setEditor} onStampa={(v, grafico) => void stampaReferto(v, grafico)} onInvia={setInvio} />
           <Registro titolo="Diagnosi" tabella="allergo_diagnosi" pseudo={ps} campi={CAMPI_DIAGNOSI} ordine="creato_il" onCambio={cambia}
             iniziali={() => ({ stato: 'attiva', data_diagnosi: oggi() })} trasforma={(r) => ({ ...r, aggiornato_il: new Date().toISOString() })}
             riassunto={(r) => (
@@ -210,6 +217,22 @@ export default function SchedaAllergologica({ id, claims }: { id: string; claims
       {scheda === 'terapie' && <Terapie pseudo={ps} onCambio={cambia} />}
       {scheda === 'anamnesi' && <Anamnesi pseudo={ps} />}
 
+      {invio && (
+        <Finestra titolo={`Invia ai genitori · visita del ${giorno(invio.data)}`} onChiudi={() => setInvio(null)} larga>
+          <InviaDocumenti
+            allergoPazienteId={p.id} studioId={p.studio_id} nomeStudio={studio.dati?.nome}
+            descrizione={`Referto della visita allergologica del ${giorno(invio.data)}`}
+            documenti={[
+              { id: 'colori', titolo: `Referto allergologico ${giorno(invio.data).replace(/\//g, '-')}`, crea: () => elementoReferto(invio, true) },
+              { id: 'classico', titolo: `Referto allergologico (formato classico) ${giorno(invio.data).replace(/\//g, '-')}`, crea: () => elementoReferto(invio, false), preselezionato: false },
+            ]}
+            destinatari={p.genitore_nome || p.genitore_email || p.genitore_telefono ? [{
+              chiave: 'genitore', nome: p.genitore_nome || 'Genitore', ruolo: 'Genitore (anagrafica allergologica)',
+              email: p.genitore_email ?? null, telefono: p.genitore_telefono ?? null,
+            }] : []}
+            onChiudi={() => setInvio(null)} />
+        </Finestra>
+      )}
       {stampaAperta === 'piano' && t && (
         <Finestra titolo="Piano d'azione per l'anafilassi" onChiudi={() => setStampaAperta(null)} larga>
           <ModuloPiano t={t} paziente={p} onStampa={(d) => {
@@ -235,7 +258,9 @@ export default function SchedaAllergologica({ id, claims }: { id: string; claims
   );
 }
 
-function ElencoVisite({ visite, onApri, onStampa }: { visite: RigaAllergo[]; onApri: (v: RigaAllergo | 'nuova') => void; onStampa: (v: RigaAllergo, grafico: boolean) => void }) {
+function ElencoVisite({ visite, onApri, onStampa, onInvia }: {
+  visite: RigaAllergo[]; onApri: (v: RigaAllergo | 'nuova') => void; onStampa: (v: RigaAllergo, grafico: boolean) => void; onInvia: (v: RigaAllergo) => void;
+}) {
   return (
     <Pannello titolo="Visite" sottotitolo="Referti nel formato dell'ambulatorio; nel controllo si richiama sempre la visita precedente"
               azione={<Bottone variante="primario" onClick={() => onApri('nuova')}>{visite.length ? '+ Controllo clinico' : '+ Prima visita'}</Bottone>}>
@@ -258,6 +283,7 @@ function ElencoVisite({ visite, onApri, onStampa }: { visite: RigaAllergo[]; onA
                 <Bottone onClick={() => onApri(v)}>Apri</Bottone>
                 <Bottone variante="primario" onClick={() => onStampa(v, true)}>Referto a colori</Bottone>
                 <Bottone onClick={() => onStampa(v, false)}>Referto classico</Bottone>
+                <Bottone onClick={() => onInvia(v)}>Invia</Bottone>
               </div>
             </li>
           ))}

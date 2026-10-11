@@ -78,7 +78,8 @@ export type FinalitaConsenso =
   | 'portale'
   | 'comunicazioni'
   | 'condivisione_altro_genitore'
-  | 'whatsapp';
+  | 'whatsapp'
+  | 'invio_documenti';
 
 export type StatoConsenso = 'concesso' | 'negato' | 'revocato' | 'da_rinnovare';
 

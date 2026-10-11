@@ -1,4 +1,4 @@
-# Figure, permessi, portale genitori e amministrazione (migrazione 2700)
+# Figure, permessi e amministrazione (migrazioni 2700 e 2800)
 
 ## Figure del gestionale
 
@@ -9,7 +9,7 @@
 | **Pediatra sostituto** | Le cartelle del titolare solo nei periodi di sostituzione. |
 | **Pediatra allergologo** | Solo il modulo Allergologia (anagrafica separata). |
 | **Segreteria** | Agenda, anagrafiche, accompagnatori, consensi. Cartelle cliniche **in sola lettura** solo per i pediatri che l'hanno consentito (`anagrafica.permessi_cartelle`). |
-| **Genitore** | Portale: figli, visite (motivo, terapia, indicazioni), documenti, appuntamenti, crescita, vaccini, consensi con firma. |
+| **Genitore** | Nessun accesso (il portale è stato dismesso nella migrazione 2800). Riceve i documenti delle visite via email o WhatsApp: vedi `invio-documenti.md`. |
 
 Il claim `app_admin` del token serve solo all'interfaccia: per i dati clinici il database ricontrolla la tabella a ogni richiesta (`sicurezza.admin_attivo()`), quindi una revoca vale subito.
 
@@ -25,14 +25,6 @@ Allergologia è il modello: ruolo dedicato o abilitazione del medico, tabelle cl
 
 `anagrafica.integrazioni` conserva solo impostazioni non segrete (whitelist nel database). Token e chiavi vanno **solo** nei Secrets delle Edge Functions. Per Google Calendar è pronta la mappa `anagrafica.calendario_eventi_esterni` (solo service role): eventi con titolo generico, senza nome del bambino né motivo.
 
-## Consensi e firma dal portale
-
-1. Il genitore vede i consensi anche prima di aver dato quello al portale (`api.portale_consensi`).
-2. Apre l'informativa (testo in `anagrafica.informative`, versionato): l'apertura è registrata.
-3. Sceglie e firma sullo schermo: `api.firma_consenso` salva il consenso (canale portale) e in `anagrafica.firme_consenso` l'immagine della firma con impronta SHA-256 di consenso, informativa, firma e ora.
-
-È una **firma elettronica semplice**. La firma grafometrica avanzata (FEA) richiede un fornitore certificato che cifri i dati biometrici (DPCM 22/02/2013): si può integrare in seguito con tablet di firma. I testi delle informative vanno fatti validare al DPO.
-
 ## Amministrazione
 
-Panoramica · Staff e figure · Accesso alle cartelle · Moduli specialistici · Account genitori e consensi (accesso al portale, ultimo accesso, consensi dati/firmati/mancanti, scollegamento) · Integrazioni · Catalogo prestazioni · Registro accessi.
+Panoramica · Staff e figure · Accesso alle cartelle · Moduli specialistici · Invii di documenti (destinatari, aperture del link, revoca) · Integrazioni · Catalogo prestazioni · Registro accessi.

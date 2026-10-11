@@ -57,3 +57,11 @@ verify_jwt = false
 # Gestione dello staff: chiamata dall'app con il JWT dell'amministratore.
 [functions.gestione-staff]
 verify_jwt = true
+
+# Invio dei documenti di una visita: chiamata dall'app con il JWT del medico.
+[functions.invia-documenti]
+verify_jwt = true
+
+# Ritiro dei documenti da parte del genitore: pubblica (link segreto + codice di verifica).
+[functions.ritiro-documenti]
+verify_jwt = false

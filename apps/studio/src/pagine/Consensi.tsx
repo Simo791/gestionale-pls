@@ -23,11 +23,11 @@ export default function Consensi() {
         </p>
       </div>
 
-      <Pannello titolo="Come funziona la regola" sottotitolo="Dati sanitari e portale genitori">
+      <Pannello titolo="Come funziona la regola" sottotitolo="Consenso al trattamento dei dati sanitari">
         <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
           <li><strong>Completo</strong>: hanno firmato tutti i genitori con responsabilità genitoriale.</li>
           <li><strong>Parziale</strong>: ha firmato almeno uno. Il trattamento ordinario è possibile, ma lo studio chiede la seconda firma.</li>
-          <li><strong>Assente</strong>: nessuna firma. Il portale genitori resta chiuso per quel bambino.</li>
+          <li><strong>Assente</strong>: nessuna firma. Raccogli il consenso cartaceo in studio prima di trattare i dati.</li>
           <li>Ogni dichiarazione è conservata con data e canale; una revoca crea una nuova riga, non cancella la precedente.</li>
         </ul>
       </Pannello>

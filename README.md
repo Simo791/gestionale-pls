@@ -17,7 +17,7 @@ di minori (GDPR art. 9) fin dal primo commit.
 | Consensi | Uno per genitore e per finalità, storico non modificabile, stato completo/parziale/assente |
 | Audit | Registro in sola aggiunta con catena di hash SHA-256 e funzione di verifica |
 | Accesso | Login con codice via email (OTP) + secondo fattore TOTP per lo staff |
-| App | `apps/studio` (pediatra, segreteria, sostituto, allergologo) e `apps/genitori` (portale), React + Vite + Tailwind |
+| App | `apps/studio` (pediatra, segreteria, sostituto, allergologo), React + Vite + Tailwind. Niente portale genitori: i documenti delle visite si inviano via email o WhatsApp con link personale protetto |
 | Moduli | Agenda, cartella, visite e prescrizioni, curve di crescita, vaccini, patologie, certificati, staff e sostituzioni, WhatsApp, Allergologia |
 | Test | Test pgTAP su RLS, audit, Auth Hook, staff, allergologia e correzioni di sicurezza (`supabase/tests/database`); test Vitest sulla logica condivisa |
 
@@ -25,7 +25,6 @@ di minori (GDPR art. 9) fin dal primo commit.
 
 ```
 apps/studio/            app dello studio
-apps/genitori/          portale genitori
 packages/shared/        tipi, regole di consenso, calcolo età, validazione (Zod)
 supabase/migrations/    schema SQL versionato (si applica in ordine)
 supabase/tests/         test pgTAP (supabase test db)
@@ -49,11 +48,10 @@ pnpm db:test                 # lancia i test pgTAP
 ```
 
 `supabase start` stampa URL e `anon key`: copia `.env.example` in `apps/studio/.env.local`
-e in `apps/genitori/.env.local` e incolla i valori. Poi:
+e incolla i valori. Poi:
 
 ```bash
 pnpm dev:studio              # http://localhost:5173
-pnpm dev:genitori            # http://localhost:5174
 ```
 
 Le email con il codice arrivano su Mailpit (l'indirizzo è nell'output di `supabase start`).
@@ -73,8 +71,6 @@ già i dati non fa nulla. Tutti i dati sono inventati; il calendario vaccinale �
 | segreteria@example.com | segreteria | anagrafica e agenda, nessun dato clinico |
 | sostituto@example.com | sostituto | nulla di clinico: la sostituzione è scaduta |
 | pediatra.altrostudio@example.com | pediatra di un altro studio | non vede i pazienti dello studio demo |
-| mamma.bianchi@example.com | genitore | vede Luca e Sofia |
-| papa.bianchi@example.com | genitore | vede solo Luca: per Sofia manca il suo consenso al portale |
 
 ## Setup del progetto Supabase online
 
@@ -97,12 +93,11 @@ già i dati non fa nulla. Tutti i dati sono inventati; il calendario vaccinale �
 
 ## Deploy su Vercel
 
-Due progetti Vercel dallo stesso repository:
+Un progetto Vercel dal repository:
 
 | Progetto | Root Directory | Variabili |
 | --- | --- | --- |
 | pls-studio | `apps/studio` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
-| pls-genitori | `apps/genitori` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
 
 ## Documentazione
 

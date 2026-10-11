@@ -165,7 +165,7 @@ export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
           )}
         </Tendina>
 
-        <Tendina titolo="Consensi da completare" sottotitolo="Dati sanitari e portale genitori"
+        <Tendina titolo="Consensi da completare" sottotitolo="Consenso ai dati sanitari"
                  conteggio={consensi.dati ? pazientiConsensiIncompleti : '…'} tono={pazientiConsensiIncompleti ? 'attenzione' : 'ok'}
                  azione={<a href={link('consensi')} className="text-sm text-teal-700 underline">Vedi tutti</a>}>
           {consensi.errore ? <Errore messaggio={consensi.errore} /> : consensi.caricamento ? <Caricamento /> :

@@ -39,11 +39,8 @@ select is((select azione from audit.eventi order by id desc limit 1), 'APERTURA_
 select is((select actor_id from audit.eventi order by id desc limit 1),
   'a0000000-0000-4000-8000-000000000001'::uuid, 'con l''identità del pediatra');
 
-select pg_temp.come('b0000000-0000-4000-8000-000000000001', 'tutore', null);
-set local role authenticated;
-select ok((select count(*) from api.registro_accessi('d0000000-0000-4000-8000-000000000001')) > 0,
-  'la madre vede il registro accessi della cartella del figlio');
-reset role;
+select is((public.custom_access_token_hook(jsonb_build_object('user_id', 'b0000000-0000-4000-8000-000000000001', 'claims', '{}'::jsonb))
+          -> 'claims' ->> 'app_ruolo'), 'nessuno', 'portale dismesso: un genitore non riceve più il ruolo tutore');
 
 select pg_temp.come('a0000000-0000-4000-8000-000000000002', 'segreteria',
                     'c0000000-0000-4000-8000-000000000001', 'aal2');
@@ -71,7 +68,7 @@ select is(public.custom_access_token_hook(jsonb_build_object(
   'c0000000-0000-4000-8000-000000000001', 'hook: e lo studio di appartenenza');
 select is(public.custom_access_token_hook(jsonb_build_object(
     'user_id', 'b0000000-0000-4000-8000-000000000001', 'claims', '{}'::jsonb)) #>> '{claims,app_ruolo}',
-  'tutore', 'hook: un genitore collegato riceve app_ruolo = tutore');
+  'nessuno', 'hook: portale dismesso, un genitore non riceve ruoli');
 select is(public.custom_access_token_hook(jsonb_build_object(
     'user_id', gen_random_uuid(), 'claims', '{}'::jsonb)) #>> '{claims,app_ruolo}',
   'nessuno', 'hook: un account sconosciuto non riceve alcun ruolo');

@@ -6,7 +6,6 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "dev:studio": "pnpm --filter @pls/studio dev",
-    "dev:genitori": "pnpm --filter @pls/genitori dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",

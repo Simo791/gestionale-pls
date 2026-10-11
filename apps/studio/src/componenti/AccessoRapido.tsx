@@ -58,7 +58,7 @@ export default function AccessoRapido({ claims, onChiudi }: { claims: ClaimsApp;
     if (conGenitore) {
       if (!g.nome.trim() || !g.cognome.trim()) return setErrore('Inserisci nome e cognome del genitore, oppure togli la spunta.');
       if (!CF.test(g.cf.trim().toUpperCase())) return setErrore('Il codice fiscale del genitore deve avere 16 caratteri.');
-      if (!EMAIL.test(g.email.trim())) return setErrore('Serve un\'email valida del genitore (per il portale e le comunicazioni).');
+      if (!EMAIL.test(g.email.trim())) return setErrore('Serve un\'email valida del genitore (per l\'invio dei documenti e le comunicazioni).');
     }
     setInvio(true);
     const { data, error } = await supabase.schema('api').rpc('registra_paziente_rapido', {

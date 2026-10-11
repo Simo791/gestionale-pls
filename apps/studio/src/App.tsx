@@ -1,4 +1,5 @@
 import { richiedeMfa, usaAppStudio, type ClaimsApp } from '@pls/shared';
+import { useEffect, useState } from 'react';
 import Layout from './componenti/Layout';
 import { q, useDati } from './lib/dati';
 import { useRotta } from './lib/rotta';
@@ -15,12 +16,24 @@ import Cruscotto from './pagine/Cruscotto';
 import Patologie from './pagine/Patologie';
 import Registro from './pagine/Registro';
 import SchedaAllergologica from './pagine/SchedaAllergologica';
+import RitiroDocumenti from './pagine/RitiroDocumenti';
 import SchedaPaziente from './pagine/SchedaPaziente';
 import SecondoFattore from './pagine/SecondoFattore';
 
 /** Sequenza: login con codice email → secondo fattore TOTP → applicazione. */
 export default function App() {
   const { caricamento, sessione, claims } = useSessione();
+  // Se il link del genitore viene incollato in una scheda già aperta, la pagina si aggiorna.
+  const [, setHash] = useState(window.location.hash);
+  useEffect(() => {
+    const f = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', f);
+    return () => window.removeEventListener('hashchange', f);
+  }, []);
+
+  // Link inviato al genitore: pagina pubblica di ritiro dei documenti, senza accesso.
+  const ritiro = /^#\/ritiro\/([0-9a-f]{48})$/.exec(window.location.hash)?.[1];
+  if (ritiro) return <RitiroDocumenti token={ritiro} />;
 
   if (caricamento) return <p className="p-6 text-slate-500">Caricamento…</p>;
   if (!sessione || !claims) return <Accesso titolo="Gestionale PLS · Studio" creaNuoviUtenti={false} />;

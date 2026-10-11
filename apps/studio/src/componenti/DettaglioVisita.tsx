@@ -9,8 +9,10 @@ const Riga = ({ t, v }: { t: string; v: ReactNode }) =>
   v ? <div className="grid gap-1 py-1.5 sm:grid-cols-[11rem_1fr]"><dt className="text-slate-500">{t}</dt><dd className="whitespace-pre-line text-slate-800">{v}</dd></div> : null;
 
 /** Tutti i dati di una visita registrata, con le misure prese in quell'occasione. */
-export default function DettaglioVisita({ v, misura, sesso, descrizioni, nomiPresenti, onReferto }: {
+export default function DettaglioVisita({ v, misura, sesso, descrizioni, nomiPresenti, onReferto, onInvia }: {
   v: Visita; misura: Misurazione | null; sesso: Sesso; descrizioni: Map<string, string>; nomiPresenti: Map<string, string>; onReferto: () => void;
+  /** Invio dei documenti della visita al genitore (solo per chi può farlo). */
+  onInvia?: () => void;
 }) {
   const perc = (ind: 'peso' | 'altezza' | 'circonferenza_cranica', x: number | null) =>
     misura && x !== null ? `${x} (percentile ${fmtPercentile(percentileMisura(ind, sesso, misura.eta_giorni, x))})` : null;
@@ -33,6 +35,7 @@ export default function DettaglioVisita({ v, misura, sesso, descrizioni, nomiPre
         <Riga t="Prossimo controllo" v={v.prossimo_controllo && fmtGiornoIso(v.prossimo_controllo)} />
       </dl>
       <Bottone variante="primario" onClick={onReferto}>Referto PDF</Bottone>
+      {onInvia && <Bottone onClick={onInvia}>Invia ai genitori (email / WhatsApp)</Bottone>}
     </div>
   );
 }

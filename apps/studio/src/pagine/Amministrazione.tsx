@@ -1,10 +1,10 @@
 import type { ClaimsApp, MembroStudio } from '@pls/shared';
-import AccountGenitori from '../componenti/AccountGenitori';
 import GestioneAllergologia from '../componenti/allergo/GestioneAllergologia';
 import GestioneStaff from '../componenti/GestioneStaff';
 import ImportaCatalogo from '../componenti/ImportaCatalogo';
 import Integrazioni from '../componenti/Integrazioni';
 import PermessiSegreteria from '../componenti/PermessiSegreteria';
+import RegistroInvii from '../componenti/RegistroInvii';
 import { Badge, Errore, Kpi, Pannello } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
 import { etichettaRuolo } from '../lib/formato';
@@ -16,7 +16,7 @@ const SEZIONI = [
   { id: 'staff', titolo: 'Staff e figure' },
   { id: 'permessi', titolo: 'Accesso alle cartelle' },
   { id: 'moduli', titolo: 'Moduli specialistici' },
-  { id: 'genitori', titolo: 'Account genitori e consensi' },
+  { id: 'invii', titolo: 'Invii di documenti' },
   { id: 'integrazioni', titolo: 'Integrazioni' },
   { id: 'catalogo', titolo: 'Catalogo prestazioni' },
 ] as const;
@@ -41,7 +41,7 @@ const FIGURE = [
   { nome: 'Pediatra sostituto', testo: 'Le cartelle del titolare solo nei periodi di sostituzione attivati dal titolare.' },
   { nome: 'Pediatra allergologo', testo: 'Solo il modulo Allergologia, con anagrafica pazienti separata.' },
   { nome: 'Segreteria', testo: 'Agenda, anagrafiche, accompagnatori e consensi. Le cartelle cliniche solo in lettura e solo se un pediatra (o l’amministratore) lo consente.' },
-  { nome: 'Genitore', testo: 'Portale: visite, documenti, appuntamenti e misure dei propri figli; firma dei consensi.' },
+  { nome: 'Genitori', testo: 'Nessun accesso al gestionale: ricevono i documenti delle visite via email o WhatsApp, con un link personale protetto dalla data di nascita del bambino.' },
 ];
 
 export default function Amministrazione({ claims, sezione }: { claims: ClaimsApp; sezione?: string }) {
@@ -97,9 +97,9 @@ export default function Amministrazione({ claims, sezione }: { claims: ClaimsApp
           </Pannello>
         </>
       )}
-      {attiva === 'genitori' && (
-        <Pannello titolo="Account genitori e consensi" sottotitolo="Accesso al portale, consensi dati in studio o firmati sul portale, consensi mancanti">
-          <AccountGenitori />
+      {attiva === 'invii' && (
+        <Pannello titolo="Invii di documenti ai genitori" sottotitolo="Email e WhatsApp: destinatario, documenti, aperture del link; il link si può revocare">
+          <RegistroInvii />
         </Pannello>
       )}
       {attiva === 'integrazioni' && <Integrazioni />}
@@ -117,13 +117,13 @@ function Panoramica() {
     const ana = supabase.schema('anagrafica');
     const [membri, genitori, integrazioni, studio, catalogo] = await Promise.all([
       q<MembroStudio[]>(ana.from('membri_studio').select('*')),
-      q<{ account_collegato: boolean; figli: { responsabilita: boolean }[]; consensi: unknown[] }[]>(supabase.schema('api').rpc('admin_account_genitori')),
+      q<{ id: string; stato: string; ritiri: number }[]>(ana.from('invii_documenti').select('id, stato, ritiri').gte('creato_il', new Date(Date.now() - 30 * 86_400_000).toISOString())),
       q<{ tipo: string; stato: string }[]>(ana.from('integrazioni').select('tipo, stato')),
       q<{ allergologia_attiva: boolean }>(ana.from('studi').select('allergologia_attiva').single()),
       ana.from('catalogo_prestazioni').select('id', { count: 'exact', head: true }).eq('attivo', true),
     ]);
     if (catalogo.error) throw new Error(catalogo.error.message);
-    return { membri, genitori, integrazioni, studio, prestazioni: catalogo.count ?? 0 };
+    return { membri, invii: genitori, integrazioni, studio, prestazioni: catalogo.count ?? 0 };
   }, []);
   if (dati.errore) return <Errore messaggio={dati.errore} />;
   const d = dati.dati;
@@ -137,15 +137,16 @@ function Panoramica() {
              nota={d ? Object.entries(perRuolo).map(([r, n]) => `${n} ${etichettaRuolo(r as MembroStudio['ruolo']).toLowerCase()}`).join(' · ') : ''} />
         <Kpi etichetta="Amministratori" valore={d ? attivi.filter((m) => m.amministratore).length : '…'} tono="neutro"
              nota="Accesso completo" href={link('amministrazione', 'staff')} />
-        <Kpi etichetta="Genitori con portale attivo" valore={d ? d.genitori.filter((g) => g.account_collegato).length : '…'} tono="ok"
-             nota={d ? `su ${d.genitori.length} registrati` : ''} href={link('amministrazione', 'genitori')} />
+        <Kpi etichetta="Documenti inviati (30 giorni)" valore={d ? d.invii.filter((i) => i.stato === 'inviato' || i.stato === 'consegnato_manualmente').length : '…'} tono="ok"
+             nota={d ? `${d.invii.filter((i) => i.ritiri > 0).length} aperti dai genitori` : ''} href={link('amministrazione', 'invii')} />
         <Kpi etichetta="Prestazioni in catalogo" valore={d ? d.prestazioni : '…'} tono={d?.prestazioni ? 'ok' : 'attenzione'}
              nota={d?.prestazioni ? 'Catalogo regionale importato' : 'Da importare'} href={link('amministrazione', 'catalogo')} />
       </section>
       <Pannello titolo="Stato dei servizi">
         <ul className="divide-y divide-slate-100 text-sm">
           <li className="flex items-center justify-between py-2"><span>Modulo Allergologia</span>{d?.studio.allergologia_attiva ? <Badge tono="ok">Attivo</Badge> : <Badge>Non attivo</Badge>}</li>
-          <li className="flex items-center justify-between py-2"><span>WhatsApp (promemoria)</span><Badge tono={statoInt('whatsapp') === 'attiva' ? 'ok' : 'neutro'}>{statoInt('whatsapp').replace('_', ' ')}</Badge></li>
+          <li className="flex items-center justify-between py-2"><span>Email (invio documenti)</span><Badge tono={statoInt('email') === 'attiva' ? 'ok' : 'neutro'}>{statoInt('email').replace('_', ' ')}</Badge></li>
+          <li className="flex items-center justify-between py-2"><span>WhatsApp (promemoria e documenti)</span><Badge tono={statoInt('whatsapp') === 'attiva' ? 'ok' : 'neutro'}>{statoInt('whatsapp').replace('_', ' ')}</Badge></li>
           <li className="flex items-center justify-between py-2"><span>Google Calendar</span><Badge tono={statoInt('google_calendar') === 'attiva' ? 'ok' : 'neutro'}>{statoInt('google_calendar').replace('_', ' ')}</Badge></li>
           <li className="flex items-center justify-between py-2"><span>Registro accessi (catena di hash)</span><a href={link('registro')} className="text-teal-700 underline">Verifica integrità</a></li>
         </ul>

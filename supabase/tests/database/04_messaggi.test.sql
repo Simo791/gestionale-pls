@@ -56,19 +56,19 @@ select is((select count(*)::int from anagrafica.messaggi_outbox
            where appuntamento_id = 'f0000000-0000-4000-8000-000000000001' and stato = 'in_coda'), 0,
   'annullamento: nessun messaggio resta in coda');
 
--- ---------------------------------------------------------------- richiesta del genitore
-select pg_temp.come('b0000000-0000-4000-8000-000000000001', 'tutore', null);
+-- ---------------------------------------------------------------- richiesta registrata dalla segreteria
+select pg_temp.come('a0000000-0000-4000-8000-000000000002', 'segreteria', 'c0000000-0000-4000-8000-000000000001', 'aal2');
 set local role authenticated;
 insert into anagrafica.appuntamenti (id, studio_id, pediatra_id, paziente_id, prenotato_da, inizio, fine, tipo, stato)
 values ('f0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001',
         'a0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000002',
-        'b0000000-0000-4000-8000-000000000001',
+        'a0000000-0000-4000-8000-000000000002',
         date_trunc('day', now()) + interval '10 days 15 hours', date_trunc('day', now()) + interval '10 days 15 hours 20 minutes',
         'visita', 'richiesto');
 reset role;
 select is((select count(*)::int from anagrafica.messaggi_outbox
            where appuntamento_id = 'f0000000-0000-4000-8000-000000000002'), 0,
-  'richiesta del genitore: nessun messaggio finché non è confermata');
+  'richiesta: nessun messaggio finché non è confermata');
 
 update anagrafica.appuntamenti set stato = 'confermato' where id = 'f0000000-0000-4000-8000-000000000002';
 select is((select tipo from anagrafica.messaggi_outbox

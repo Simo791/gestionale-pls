@@ -1,8 +1,8 @@
--- Figure, permessi della segreteria, accompagnatori, integrazioni, portale e firme.
+-- Figure, permessi della segreteria, accompagnatori e integrazioni.
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path to public, extensions;
-select plan(31);
+select plan(25);
 
 create function pg_temp.come(p_sub uuid, p_ruolo text, p_admin boolean default false, p_studio uuid default 'c0000000-0000-4000-8000-000000000001')
 returns void language sql as $$
@@ -105,20 +105,6 @@ reset role;
 select pg_temp.come('a0000000-0000-4000-8000-000000000002', 'segreteria');
 set local role authenticated;
 select throws_ok($$ select api.imposta_integrazione('whatsapp', true, '{}') $$, 'P0001', null, 'la segreteria non configura le integrazioni');
-reset role;
-
--- ------------------------------------------------ portale: informativa, firma, storico
-select pg_temp.come('b0000000-0000-4000-8000-000000000001', 'tutore');
-set local role authenticated;
-select ok((select count(*) from api.portale_consensi()) >= 5, 'il genitore vede i consensi da firmare');
-select throws_ok($$ select api.firma_consenso('d0000000-0000-4000-8000-000000000001', 'whatsapp', 'concesso', 'data:image/png;base64,AAAA', 3) $$,
-  'P0001', 'Apri e leggi l''informativa prima di firmare', 'prima si legge l''informativa');
-select lives_ok($$ select api.segna_informativa_letta('d0000000-0000-4000-8000-000000000001', 'whatsapp') $$, 'apre l''informativa');
-select lives_ok($$ select api.firma_consenso('d0000000-0000-4000-8000-000000000001', 'whatsapp', 'concesso', 'data:image/png;base64,AAAA', 3, 'test') $$,
-  'firma il consenso');
-select ok((select firmato from api.portale_consensi() where paziente_id = 'd0000000-0000-4000-8000-000000000001' and finalita = 'whatsapp'),
-  'il consenso risulta firmato');
-select lives_ok($$ select api.portale_storico_figlio('d0000000-0000-4000-8000-000000000001') $$, 'vede lo storico del figlio');
 reset role;
 
 select * from finish();

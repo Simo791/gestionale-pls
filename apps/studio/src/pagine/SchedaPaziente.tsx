@@ -40,6 +40,7 @@ import { docAllergie, docAnagrafica, docAvvisoVaccino, docDietaEsclusione, docDi
 import GraficoCrescita, { riferimentoEffettivo, type SceltaCurva } from '../componenti/GraficoCrescita';
 import CertificatoDieta, { type AllergeneCertificato, type ContenutoDieta } from '../componenti/CertificatoDieta';
 import DettaglioVisita from '../componenti/DettaglioVisita';
+import InviaDocumenti, { type DocumentoInviabile } from '../componenti/InviaDocumenti';
 import Finestra from '../componenti/Finestra';
 import { Badge, Bottone, Caricamento, Errore, Pannello, Vuoto } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
@@ -80,7 +81,7 @@ type Dettaglio =
   | { tipo: 'nessuna_visita'; data: string }
   | { tipo: 'certificati'; data: string; elenco: Certificato[] };
 
-const FINALITA: FinalitaConsenso[] = ['dati_sanitari', 'portale', 'comunicazioni', 'condivisione_altro_genitore', 'whatsapp'];
+const FINALITA: FinalitaConsenso[] = ['dati_sanitari', 'invio_documenti', 'comunicazioni', 'whatsapp'];
 const VERSIONE_INFORMATIVA = '2026-10';
 
 const ana = () => supabase.schema('anagrafica');
@@ -129,12 +130,7 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
     && (permessiMiei.dati ?? []).some((x) => x.pediatra_id === paziente.dati?.pediatra_id);
   const puoVedereClinica = medico || solaLettura;
   const accompagnatori = useAccompagnatori(id);
-  const firme = useDati(async () => {
-    const ids = (consensi.dati ?? []).filter((c) => c.canale === 'portale').map((c) => c.id);
-    if (ids.length === 0) return new Set<string>();
-    const r = await q<{ consenso_id: string }[]>(ana().from('firme_consenso').select('consenso_id').in('consenso_id', ids));
-    return new Set(r.map((x) => x.consenso_id));
-  }, [consensi.dati]);
+  const [invio, setInvio] = useState<{ visita: Visita; documenti: DocumentoInviabile[] } | null>(null);
 
   async function mostraCf() {
     setErroreAzione(null);
@@ -299,6 +295,39 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
     setDettaglio(v ? { tipo: 'visita', visita: v } : { tipo: 'nessuna_visita', data: fmtData(a.inizio) });
   }
 
+  /** Documenti creati in una visita: referto, prescrizioni e certificati di quel giorno. */
+  async function apriInvio(v: Visita) {
+    if (!clinica || !paziente.dati) return;
+    setErroreAzione(null);
+    try {
+      const prescrizioni = await q<Prescrizione[]>(supabase.schema('clinica').from('prescrizioni').select('*').eq('visita_id', v.id).order('data'));
+      const giornoVisita = fmtData(v.data);
+      const certificati = clinica.certificati.filter((c) => c.visita_id === v.id || (c.visita_id == null && fmtGiornoIso(c.data) === giornoVisita));
+      const misura = clinica.misure.find((m) => m.visita_id === v.id) ?? null;
+      const base = async () => {
+        const b = await baseDocumento();
+        if (!b) throw new Error('Dati del documento non disponibili');
+        return b;
+      };
+      const sesso = paziente.dati.sesso;
+      const documenti: DocumentoInviabile[] = [
+        { id: 'referto', titolo: `Referto visita ${giornoVisita.replace(/\//g, '-')}`, crea: async () => docVisita(await base(), v, misura, sesso, nomiPresenti) },
+        ...prescrizioni.map((pr, i) => ({ id: `pr-${pr.id}`, titolo: `Prescrizione ${i + 1} ${giornoVisita.replace(/\//g, '-')}`,
+          crea: async () => docPrescrizione(await base(), pr) })),
+        ...certificati.filter((c) => c.tipo === 'dieta_speciale' || c.tipo === 'dieta_esclusione').map((c) => ({
+          id: `cert-${c.id}`,
+          titolo: `${c.tipo === 'dieta_speciale' ? 'Certificato dieta speciale' : 'Dieta di esclusione'} ${fmtGiornoIso(c.data).replace(/\//g, '-')}`,
+          crea: async () => (c.tipo === 'dieta_speciale'
+            ? docDietaSpeciale({ ...(await base()), dataDocumento: c.data }, c.contenuto as unknown as ContenutoDieta, c.valido_fino)
+            : docDietaEsclusione({ ...(await base()), dataDocumento: c.data }, c.contenuto as unknown as ContenutoDieta)),
+        })),
+      ];
+      setInvio({ visita: v, documenti });
+    } catch (e) {
+      setErroreAzione(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   function stampaCertificato(c: Certificato) {
     const contenuto = c.contenuto as unknown as ContenutoDieta;
     if (c.tipo === 'dieta_speciale') void stampaClinico((b) => docDietaSpeciale({ ...b, dataDocumento: c.data }, contenuto, c.valido_fino));
@@ -444,11 +473,9 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
                       return (
                         <td key={f} className="px-4 py-2">
                           {c ? (
-                            <span title={`${c.canale === 'portale' ? 'Dal portale' : 'Cartaceo in studio'} · ${fmtDataOra(c.registrato_il)}`}>
+                            <span title={`${c.canale === 'portale' ? 'Dal portale (dismesso)' : 'Cartaceo in studio'} · ${fmtDataOra(c.registrato_il)}`}>
                               <Badge tono={STATO_CONSENSO[c.stato].tono}>{STATO_CONSENSO[c.stato].testo}</Badge>
-                              <span className="block text-[11px] text-slate-500">
-                                {c.canale === 'portale' ? (firme.dati?.has(c.id) ? 'Portale · firmato' : 'Portale') : 'Cartaceo'}
-                              </span>
+
                             </span>
                           ) : r.responsabilita_genitoriale ? (
                             <button onClick={() => void registraConsenso(r.tutori!.id, f)} className="text-xs text-teal-700 underline">
@@ -523,6 +550,7 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-emerald-800">Visita salvata{ultimaSalvata.misura ? ' con le misure' : ''}.</span>
                 <Bottone onClick={() => void stampaClinico((b) => docVisita(b, ultimaSalvata.visita, ultimaSalvata.misura, p.sesso, nomiPresenti))}>Referto PDF</Bottone>
+                <Bottone variante="primario" onClick={() => void apriInvio(ultimaSalvata.visita)}>Invia ai genitori</Bottone>
                 <a href="#prescrizioni" className="text-teal-700 underline">Prescrivi esami o visite</a>
                 {ultimaSalvata.visita.prossimo_controllo && <a href={link('agenda')} className="text-teal-700 underline">Fissa il controllo del {fmtGiornoIso(ultimaSalvata.visita.prossimo_controllo)} in agenda</a>}
               </div>
@@ -544,7 +572,7 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
             </Pannello>
           </div>
 
-          <CartellaAperta dati={clinica} paziente={p} onVacciniCambiati={() => void ricaricaVaccini()}
+          <CartellaAperta dati={clinica} paziente={p} onInvia={(v) => void apriInvio(v)} onVacciniCambiati={() => void ricaricaVaccini()}
                           onApriVisita={(v) => setDettaglio({ tipo: 'visita', visita: v })}
                           onCertificato={(c) => stampaCertificato(c)}
                           onStampaAvviso={(r) => void stampaClinico((b) => docAvvisoVaccino(b, r))}
@@ -559,12 +587,30 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
           {dettaglio.tipo === 'visita' && (
             <DettaglioVisita v={dettaglio.visita} sesso={p.sesso} descrizioni={descrizioniDiagnosi} nomiPresenti={nomiPresenti}
                              misura={clinica.misure.find((m) => m.visita_id === dettaglio.visita.id) ?? null}
-                             onReferto={() => void stampaClinico((b) => docVisita(b, dettaglio.visita, clinica.misure.find((m) => m.visita_id === dettaglio.visita.id) ?? null, p.sesso, nomiPresenti))} />
+                             onReferto={() => void stampaClinico((b) => docVisita(b, dettaglio.visita, clinica.misure.find((m) => m.visita_id === dettaglio.visita.id) ?? null, p.sesso, nomiPresenti))}
+                             onInvia={medico ? () => { const v = dettaglio.visita; setDettaglio(null); void apriInvio(v); } : undefined} />
           )}
           {dettaglio.tipo === 'nessuna_visita' && <p className="text-sm text-slate-600">Nessuna visita registrata in cartella per questa data.</p>}
           {dettaglio.tipo === 'certificati' && (dettaglio.elenco.length === 0
             ? <p className="text-sm text-slate-600">Nessun certificato registrato in cartella per questa data.</p>
             : <ElencoCertificati elenco={dettaglio.elenco} onStampa={stampaCertificato} />)}
+        </Finestra>
+      )}
+
+      {invio && (
+        <Finestra titolo={`Invia ai genitori · visita del ${fmtData(invio.visita.data)}`} onChiudi={() => setInvio(null)} larga>
+          <InviaDocumenti
+            documenti={invio.documenti} pazienteId={p.id} studioId={p.studio_id} nomeStudio={intestazione.studio?.nome}
+            descrizione={`Documenti della visita del ${fmtData(invio.visita.data)}`}
+            destinatari={p.relazioni_tutela.filter((r) => r.tutori && r.responsabilita_genitoriale).map((r) => {
+              const c = correnti.get(`${r.tutori!.id}|invio_documenti`);
+              return {
+                chiave: r.tutori!.id, nome: `${r.tutori!.nome} ${r.tutori!.cognome}`, ruolo: ETICHETTA_RELAZIONE[r.tipo],
+                email: r.tutori!.email || null, telefono: r.tutori!.telefono, tutoreId: r.tutori!.id,
+                consenso: c ? c.stato === 'concesso' : null,
+              };
+            })}
+            onChiudi={() => setInvio(null)} />
         </Finestra>
       )}
 
@@ -579,10 +625,11 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
   );
 }
 
-function CartellaAperta({ dati, paziente, solaLettura = false, onVacciniCambiati, onReferto, onApriVisita, onCertificato, onDocumentoAllergia, onStampaAvviso }: {
+function CartellaAperta({ dati, paziente, solaLettura = false, onInvia, onVacciniCambiati, onReferto, onApriVisita, onCertificato, onDocumentoAllergia, onStampaAvviso }: {
   onStampaAvviso: (r: RigaLibretto) => void;
-  /** Segreteria autorizzata: i moduli di modifica restano visibili ma disattivati. */
+  /** Segreteria autorizzata: consultazione senza modifiche. */
   solaLettura?: boolean;
+  onInvia?: (v: Visita) => void;
   dati: DatiClinici; paziente: Paziente; onVacciniCambiati: () => void; onReferto: (v: Visita) => void;
   onApriVisita: (v: Visita) => void; onCertificato: (c: Certificato) => void;
   onDocumentoAllergia: (tipo: 'dieta_speciale' | 'dieta_esclusione', allergie: AllergeneCertificato[], scelte: string[]) => void;
@@ -633,7 +680,10 @@ function CartellaAperta({ dati, paziente, solaLettura = false, onVacciniCambiati
                   {v.diagnosi_icd9cm.length > 0 && <p className="text-slate-600">Diagnosi: {v.diagnosi_icd9cm.join(', ')}</p>}
                   {v.terapia && <p className="line-clamp-2 text-slate-600">Terapia: {v.terapia}</p>}
                 </button>
-                <Bottone onClick={() => onReferto(v)}>Referto PDF</Bottone>
+                <span className="flex gap-2">
+                  <Bottone onClick={() => onReferto(v)}>Referto PDF</Bottone>
+                  {onInvia && <Bottone onClick={() => onInvia(v)}>Invia</Bottone>}
+                </span>
               </li>
             ))}
           </ul>

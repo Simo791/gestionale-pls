@@ -48,9 +48,8 @@ reset role;
 select pg_temp.come('b0000000-0000-4000-8000-000000000001', 'tutore', null);
 set local role authenticated;
 select is((select count(*)::int from anagrafica.appuntamenti), 0, 'il genitore non legge la tabella appuntamenti (note interne)');
-select lives_ok($$ select * from api.appuntamenti_figlio('d0000000-0000-4000-8000-000000000001') $$, 'ma vede data e stato con la RPC');
-select throws_ok($$ select * from api.appuntamenti_figlio('d0000000-0000-4000-8000-000000000003') $$, 'P0001', 'Non autorizzato',
-  'non vede gli appuntamenti di bambini non suoi');
+select ok(to_regprocedure('api.appuntamenti_figlio(uuid)') is null, 'portale dismesso: niente funzioni per i genitori');
+select ok(to_regprocedure('api.miei_figli()') is null, 'né elenco dei figli');
 reset role;
 -- il consenso cartaceo registrato dallo staff: data e autore li fissa comunque il database
 select pg_temp.come('a0000000-0000-4000-8000-000000000002', 'segreteria', 'c0000000-0000-4000-8000-000000000001', false);
@@ -63,16 +62,8 @@ select ok((select registrato_il < now() + interval '1 minute' and registrato_da 
            from anagrafica.consensi where finalita = 'comunicazioni' order by registrato_il desc limit 1),
   'data e autore del consenso li fissa il database');
 
--- collegamento con email non verificata
-insert into auth.users (instance_id, id, aud, role, email, encrypted_password, created_at, updated_at)
-values ('00000000-0000-0000-0000-000000000000', 'f0000000-0000-4000-8000-000000000009', 'authenticated', 'authenticated',
-        'nonverificata@example.com', '', now(), now());
-select set_config('request.jwt.claims', jsonb_build_object('sub', 'f0000000-0000-4000-8000-000000000009', 'role', 'authenticated',
-  'app_ruolo', 'nessuno', 'email', 'nonverificata@example.com')::text, true);
-set local role authenticated;
-select throws_ok($$ select api.collega_account_tutore() $$, 'P0001', 'Email non verificata: accedi con il codice ricevuto via email',
-  'niente collegamento senza email verificata');
-reset role;
+-- portale dismesso: nessun collegamento di account dei genitori
+select ok(to_regprocedure('api.collega_account_tutore()') is null, 'niente collegamento di account dei genitori');
 
 -- revoca WhatsApp: i messaggi in coda vengono annullati
 select ok(exists (select 1 from anagrafica.appuntamenti where paziente_id = 'd0000000-0000-4000-8000-000000000001' and inizio > now()),

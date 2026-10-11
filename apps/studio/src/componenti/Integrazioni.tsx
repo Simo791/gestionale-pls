@@ -4,7 +4,7 @@ import { fmtDataOra } from '../lib/formato';
 import { supabase } from '../lib/supabase';
 import { Badge, Bottone, Caricamento, Errore, type Tono } from './ui';
 
-type Tipo = 'whatsapp' | 'google_calendar';
+type Tipo = 'whatsapp' | 'google_calendar' | 'email';
 interface Integrazione {
   tipo: Tipo; attiva: boolean; stato: 'da_configurare' | 'configurata' | 'attiva' | 'sospesa' | 'errore';
   impostazioni: Record<string, string>; ultimo_errore: string | null; aggiornato_il: string;
@@ -28,8 +28,24 @@ interface Definizione {
 
 const DEFINIZIONI: Definizione[] = [
   {
-    tipo: 'whatsapp', titolo: 'WhatsApp Business (promemoria appuntamenti)',
-    descrizione: 'Conferme e promemoria ai genitori che hanno dato il consenso «WhatsApp». Il testo contiene solo data, ora e indirizzo: mai il nome del bambino o dati sanitari.',
+    tipo: 'email', titolo: 'Email (invio dei documenti delle visite)',
+    descrizione: 'Invia automaticamente al genitore il link personale ai documenti della visita. Finché non è attiva, l\'app apre la tua email con il messaggio già pronto.',
+    campi: [
+      { chiave: 'indirizzo_mittente', etichetta: 'Indirizzo mittente', aiuto: 'Es. documenti@studiopediatrico.it (dominio verificato)' },
+      { chiave: 'nome_mittente', etichetta: 'Nome visualizzato', aiuto: 'Es. Studio pediatrico Dott.ssa Rossi' },
+      { chiave: 'modalita', etichetta: 'Modalità', opzioni: [['manuale', 'Manuale (si apre la tua email)'], ['automatica', 'Automatica']] },
+    ],
+    passi: [
+      'Crea un account su un servizio di invio email con server in UE e contratto per il trattamento dei dati (es. Resend, Brevo).',
+      'Verifica il dominio dello studio (record DNS SPF e DKIM) per non finire nello spam.',
+      'In Supabase › Edge Functions › Secrets inserisci RESEND_API_KEY, EMAIL_MITTENTE (es. «Studio <documenti@dominio.it>») e APP_URL (indirizzo dell\'app).',
+      'Distribuisci le funzioni «invia-documenti» e «ritiro-documenti».',
+      'Aggiorna il registro dei trattamenti con il nuovo fornitore.',
+    ],
+  },
+  {
+    tipo: 'whatsapp', titolo: 'WhatsApp Business (promemoria e documenti)',
+    descrizione: 'Conferme e promemoria ai genitori che hanno dato il consenso «WhatsApp» e link ai documenti delle visite. Il testo non contiene mai il nome del bambino o dati sanitari. Finché non è attiva, l\'app apre WhatsApp con il messaggio già pronto.',
     campi: [
       { chiave: 'numero_mittente', etichetta: 'Numero mittente (come appare ai genitori)', aiuto: 'Es. +39 0961 000000' },
       { chiave: 'nome_mittente', etichetta: 'Nome visualizzato', aiuto: 'Es. Studio pediatrico Dott.ssa Rossi' },
@@ -37,8 +53,8 @@ const DEFINIZIONI: Definizione[] = [
     ],
     passi: [
       'Crea l’account WhatsApp Business Platform (Meta) dello studio e registra il numero.',
-      'Fai approvare i modelli di messaggio «conferma» e «promemoria» (lingua italiano).',
-      'In Supabase › Edge Functions › Secrets inserisci WHATSAPP_TOKEN e WHATSAPP_PHONE_NUMBER_ID (mai qui).',
+      'Fai approvare i modelli di messaggio «conferma», «promemoria» e «documenti_disponibili» (lingua italiano; per i documenti 3 variabili: studio, scadenza, link).',
+      'In Supabase › Edge Functions › Secrets inserisci WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID e APP_URL (mai qui).',
       'Pianifica la funzione «invia-messaggi» ogni 5 minuti (vedi docs/whatsapp.md) e passa la modalità a «Invio reale».',
       'Firma con Meta l’accordo sul trattamento dei dati (DPA) e aggiorna il registro dei trattamenti.',
     ],
