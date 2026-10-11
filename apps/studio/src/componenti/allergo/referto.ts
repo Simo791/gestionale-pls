@@ -1,4 +1,4 @@
-import type { RigaAllergo } from '@pls/shared';
+import { CATEGORIE_ALLERGENE, categoriaAllergene, type RigaAllergo } from '@pls/shared';
 
 /** Modello di testo (tabella anagrafica.allergo_modelli). */
 export interface ModelloAllergo {
@@ -109,10 +109,28 @@ export function testoTest(giorno: string, d: { test: RigaAllergo[]; spirometrie:
       parti.push(`- ${t.allergene} : ${valore}`);
     }
   }
-  const ige = test.filter((t) => String(t.tipo).startsWith('ige'));
-  if (ige.length) {
-    parti.push('IgE specifiche');
-    for (const t of ige) parti.push(`- ${t.allergene}: ${t.valore != null ? `${num(t.valore)} ${t.unita ?? ''}`.trim() : ''}${t.esito === 'negativo' ? ' (negativo)' : ''}`);
+  const valoreIgE = (t: RigaAllergo, unita: string) => (t.valore != null ? `${num(t.valore)} ${String(t.unita ?? unita)}` : '');
+  const prelievo = (r: RigaAllergo[]) => {
+    const d = [...new Set(r.map((t) => (t.data_prelievo ? new Date(`${String(t.data_prelievo).slice(0, 10)}T12:00:00`).toLocaleDateString('it-IT') : '')).filter(Boolean))];
+    return d.length ? ` (prelievo del ${d.join(', ')})` : '';
+  };
+  for (const t of test.filter((x) => x.tipo === 'ige_totali')) parti.push(`IgE totali: ${valoreIgE(t, 'kU/L')}${prelievo([t])}`);
+  const specifiche = test.filter((t) => t.tipo === 'ige_specifiche');
+  if (specifiche.length) {
+    parti.push(`IgE specifiche${prelievo(specifiche)}`);
+    for (const t of specifiche) parti.push(`- ${t.allergene}: ${valoreIgE(t, 'kUA/L')}${t.esito === 'negativo' ? ' (negativo)' : ''}`);
+  }
+  const componenti = test.filter((t) => t.tipo === 'ige_componenti');
+  for (const m of [...new Set(componenti.map((t) => String(t.metodica ?? '')))]) {
+    const tutte = componenti.filter((t) => String(t.metodica ?? '') === m);
+    parti.push(`IgE molecolari${m ? ` – ${m}` : ''}${prelievo(tutte)}`);
+    const negativi = tutte.filter((t) => t.valore == null && /^(altri|tutti i) componenti/i.test(String(t.allergene)));
+    const valori = tutte.filter((t) => !negativi.includes(t));
+    for (const cat of ['alimenti', 'inalanti', 'altro'] as const) {
+      const r = valori.filter((t) => (categoriaAllergene(String(t.allergene), true) ?? 'altro') === cat);
+      if (r.length) parti.push(`${CATEGORIE_ALLERGENE[cat]}: ${r.map((t) => `${t.allergene} ${valoreIgE(t, '')}`.trim()).join('; ')}`);
+    }
+    for (const t of negativi) parti.push(`${t.allergene}: ${String(t.note ?? 'non rilevabili')}`);
   }
   for (const t of test.filter((x) => !String(x.tipo).startsWith('ige') && x.tipo !== 'prick' && x.tipo !== 'prick_by_prick')) {
     parti.push(`- ${t.tipo === 'patch' ? 'Patch test' : 'Test'} ${t.allergene}: ${t.esito ?? ''}${t.valore != null ? ` (${num(t.valore)} ${t.unita ?? ''})` : ''}`);

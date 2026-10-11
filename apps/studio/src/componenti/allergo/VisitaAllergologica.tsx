@@ -11,6 +11,7 @@ import { scelteIniziali, type Scelte } from './anamnesiTesti';
 import { OPZIONI_PREDEFINITE, resocontoVisite, type DatiResoconto, type OpzioniResoconto } from './resoconto';
 import { accoda, compila, modelliEffettivi, PACCHETTI, PROFILI, SEZIONI_MODELLO, testoTest, type ModelloAllergo } from './referto';
 import { giorno, ModuloRiga, oggi, s, stileInput } from './Registro';
+import { PannelloIgE, PannelloMolecolare } from './PannelliIgE';
 import { PannelloPrick } from './TestAllergologici';
 
 type Campi = {
@@ -230,7 +231,7 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
   const cornice = (campo: string) => `scroll-mt-4 rounded-xl transition-shadow ${evidenzia === campo ? 'ring-4 ring-amber-300' : ''}`;
   const [usati, setUsati] = useState<string[]>(() => (visita?.modelli as string[] | undefined) ?? []);
 
-  const [strumento, setStrumento] = useState<null | 'prick' | 'spirometria' | Scala>(null);
+  const [strumento, setStrumento] = useState<null | 'prick' | 'ige' | 'molecolare' | 'spirometria' | Scala>(null);
   const [errore, setErrore] = useState<string | null>(null);
   const [invio, setInvio] = useState(false);
   const etaAnni = (Date.parse(f.data) - Date.parse(paziente.data_nascita)) / (365.25 * 86_400_000);
@@ -461,6 +462,8 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
           <Pannello titolo="Test eseguiti" sottotitolo="Registra i test della giornata, poi genera il testo del referto"
                     azione={<div className="flex flex-wrap gap-1">
                       <Bottone onClick={() => setStrumento('prick')}>Prick test</Bottone>
+                      <Bottone onClick={() => setStrumento('ige')}>IgE totali e specifiche</Bottone>
+                      <Bottone onClick={() => setStrumento('molecolare')}>IgE molecolari (ISAC / ALEX)</Bottone>
                       <Bottone onClick={() => setStrumento('spirometria')}>Spirometria</Bottone>
                       {(['scorad', 'poem', etaAnni >= 12 ? 'act' : 'c_act', 'uas7'] as Scala[]).map((x) => <Bottone key={x} onClick={() => setStrumento(x)}>{NOMI_SCALA[x].nome}</Bottone>)}
                     </div>}>
@@ -522,13 +525,23 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
           <PannelloPrick pseudo={pseudo} dataIniziale={f.data.slice(0, 10)} onFatto={() => { setStrumento(null); void generaTest(); }} />
         </Finestra>
       )}
+      {strumento === 'ige' && (
+        <Finestra titolo="IgE totali e specifiche" onChiudi={() => setStrumento(null)} larga="xl">
+          <PannelloIgE pseudo={pseudo} dataIniziale={f.data.slice(0, 10)} onFatto={() => { setStrumento(null); void generaTest(); }} />
+        </Finestra>
+      )}
+      {strumento === 'molecolare' && (
+        <Finestra titolo="IgE su componenti molecolari" onChiudi={() => setStrumento(null)} larga="xl">
+          <PannelloMolecolare pseudo={pseudo} dataIniziale={f.data.slice(0, 10)} onFatto={() => { setStrumento(null); void generaTest(); }} />
+        </Finestra>
+      )}
       {strumento === 'spirometria' && (
         <Finestra titolo="Spirometria e FeNO" onChiudi={() => setStrumento(null)} larga>
           <ModuloRiga tabella="allergo_spirometrie" pseudo={pseudo} campi={CAMPI_SPIRO} riga={null} iniziali={{ data: f.data.slice(0, 10) }}
                       onFatto={() => { setStrumento(null); void generaTest(); }} />
         </Finestra>
       )}
-      {strumento && strumento !== 'prick' && strumento !== 'spirometria' && (
+      {strumento && strumento !== 'prick' && strumento !== 'ige' && strumento !== 'molecolare' && strumento !== 'spirometria' && (
         <Finestra titolo={`${NOMI_SCALA[strumento].nome}: nuovo punteggio`} onChiudi={() => setStrumento(null)} larga={strumento === 'scorad' ? 'xl' : true}>
           <ModuloScala scala={strumento} pseudo={pseudo} sotto2anni={etaAnni < 2} dataIniziale={f.data.slice(0, 10)} onFatto={() => { setStrumento(null); void generaTest(); }} />
         </Finestra>

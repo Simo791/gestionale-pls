@@ -64,10 +64,12 @@ export const CAMPI_TEST: Campo[] = [
   { nome: 'data', etichetta: 'Data', tipo: 'data', obbligatorio: true },
   { nome: 'tipo', etichetta: 'Tipo di test', tipo: 'select', opzioni: voci(TIPI_TEST), obbligatorio: true },
   { nome: 'allergene', etichetta: 'Allergene / componente', tipo: 'testo', obbligatorio: true, segnaposto: 'Es. Dermatophagoides pteronyssinus, Ara h 2' },
-  { nome: 'valore', etichetta: 'Valore', tipo: 'numero', passo: '0.01', aiuto: 'Prick: diametro medio del pomfo in mm. IgE: kUA/L.' },
+  { nome: 'valore', etichetta: 'Valore', tipo: 'numero', passo: '0.01', aiuto: 'Prick: diametro medio del pomfo in mm. IgE: kUA/L (ISAC: ISU-E; IgE totali: kU/L).' },
   { nome: 'unita', etichetta: 'Unità', tipo: 'select', opzioni: [['mm', 'mm'], ['kUA/L', 'kUA/L'], ['kU/L', 'kU/L'], ['ISU-E', 'ISU-E'], ['+/-', 'lettura +/−']] },
   { nome: 'esito', etichetta: 'Esito', tipo: 'select', opzioni: [['positivo', 'Positivo'], ['negativo', 'Negativo'], ['dubbio', 'Dubbio']],
     aiuto: 'Se lasci vuoto, per prick e IgE viene calcolato dal valore.' },
+  { nome: 'metodica', etichetta: 'Metodica / piattaforma', tipo: 'testo', segnaposto: 'Es. ImmunoCAP ISAC E112i, ALEX² Allergy Xplorer' },
+  { nome: 'data_prelievo', etichetta: 'Data del prelievo', tipo: 'data', aiuto: 'Per gli esami del sangue: data riportata dal laboratorio.' },
   { nome: 'note', etichetta: 'Note', tipo: 'area' },
 ];
 

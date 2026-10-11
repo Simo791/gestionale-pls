@@ -125,3 +125,25 @@ Valore legale (scelte di progetto):
   con firma digitale qualificata (CAD, D.Lgs. 82/2005) prima dell'invio per email;
 - i calcolatori dell'app (SCORAD, c-ACT, criteri di anafilassi, dose dell'autoiniettore) sono di supporto al medico
   e non compaiono nel referto come giudizi.
+
+## IgE totali, specifiche e molecolari (migrazione 2600)
+
+Dalla visita (riquadro dei test del giorno) o dalla scheda **Test allergologici**:
+
+- **IgE totali e specifiche**: IgE totali in kU/L e pannello degli estratti più richiesti in età pediatrica
+  (codici ImmunoCAP: d1, d2, g6, w21, t9, t23, e1, e5, f1, f2, f13, f17…), divisi tra alimenti, inalanti e altri.
+  Si compilano solo gli allergeni dosati; altri estratti si aggiungono a mano.
+- **IgE molecolari**: si sceglie la piattaforma e si cliccano **solo i componenti positivi**, poi si scrive il valore.
+  - ImmunoCAP ISAC E112i: 112 componenti, ISU-E, < 0,3 non rilevabile (semiquantitativo).
+  - ALEX² Allergy Xplorer: 178 componenti molecolari (5 solo per ricerca), kUA/L, < 0,3 negativo/incerto.
+    Gli estratti di ALEX² si registrano come IgE specifiche.
+  - ImmunoCAP singoli componenti: kUA/L, cut-off 0,35.
+  - La casella «tutti gli altri componenti del pannello sono non rilevabili» aggiunge nel referto la frase
+    corrispondente (con il cut-off della piattaforma).
+- Ogni riga salva `metodica` e `data_prelievo` (data del laboratorio); la data di registrazione è quella della
+  visita, così il referto di quel giorno riporta gli esami.
+- **Referto**: IgE totali; IgE specifiche in due tabelle (alimenti / inalanti); componenti molecolari in una tabella
+  divisa in Alimenti, Inalanti e Altri (lattice, veleni, CCD) con fonte, famiglia proteica e valore. Solo valori:
+  nessun giudizio di rischio automatico. La famiglia proteica è un dato descrittivo della molecola.
+- Catalogo in `packages/shared/src/molecolare.ts`, verificato contro gli elenchi ufficiali
+  (ISAC E112i: 112; ALEX²: 177 + 5 RUO). Cor a 1.0401 (nocciola, alimento) e Cor a 1.0101/0103 (polline) sono distinti.

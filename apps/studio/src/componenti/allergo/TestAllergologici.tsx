@@ -1,18 +1,21 @@
-import { esitoIgE, esitoPrick, type RigaAllergo } from '@pls/shared';
+import { esitoComponente, esitoIgE, esitoPrick, piattaformaDa, PIATTAFORME, type RigaAllergo } from '@pls/shared';
 import { useState, type FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
 import Finestra from '../Finestra';
 import { Badge, Bottone, Errore } from '../ui';
 import { CAMPI_TEST, PANNELLO_PRICK, TIPI_TEST } from './definizioni';
+import { PannelloIgE, PannelloMolecolare } from './PannelliIgE';
 import Registro, { giorno, oggi, s, stileInput } from './Registro';
 
 const TONO_ESITO = { positivo: 'errore', negativo: 'ok', dubbio: 'attenzione' } as const;
 
-/** Esito calcolato se il medico non l'ha indicato: prick ≥ 3 mm, IgE ≥ 0,35 kUA/L. */
+/** Esito calcolato se il medico non l'ha indicato: prick ≥ 3 mm, IgE ≥ 0,35 kUA/L, ISAC/ALEX ≥ 0,3. */
 function completaEsito(r: Record<string, unknown>): Record<string, unknown> {
   if (r.esito || r.valore == null) return r;
   const v = Number(r.valore);
   if ((r.tipo === 'prick' || r.tipo === 'prick_by_prick') && r.unita !== 'kUA/L') return { ...r, unita: r.unita ?? 'mm', esito: esitoPrick(v) };
+  const piattaforma = r.tipo === 'ige_componenti' ? piattaformaDa(r.metodica) : null;
+  if (piattaforma) return { ...r, unita: r.unita ?? PIATTAFORME[piattaforma].unita, esito: esitoComponente(v, piattaforma) };
   if (r.tipo === 'ige_specifiche' || r.tipo === 'ige_componenti') return { ...r, unita: r.unita ?? 'kUA/L', esito: esitoIgE(v) };
   return r;
 }
@@ -83,7 +86,8 @@ export function PannelloPrick({ pseudo, onFatto, dataIniziale }: { pseudo: strin
 }
 
 export default function TestAllergologici({ pseudo, onCambio }: { pseudo: string; onCambio?: () => void }) {
-  const [pannello, setPannello] = useState(false);
+  const [pannello, setPannello] = useState<null | 'prick' | 'ige' | 'molecolare'>(null);
+  const fatto = () => { setPannello(null); setVersione((v) => v + 1); onCambio?.(); };
   const [versione, setVersione] = useState(0);
   return (
     <>
@@ -91,21 +95,36 @@ export default function TestAllergologici({ pseudo, onCambio }: { pseudo: string
         titolo="Test allergologici" sottotitolo="Prick, prick by prick, IgE specifiche e molecolari, patch. Sensibilizzazione non significa allergia: leggere con la storia clinica."
         tabella="allergo_test" pseudo={pseudo} campi={CAMPI_TEST} aggiorna={versione} onCambio={onCambio}
         iniziali={() => ({ data: oggi(), tipo: 'ige_specifiche', unita: 'kUA/L' })} trasforma={completaEsito}
-        azioniExtra={<Bottone onClick={() => setPannello(true)}>Seduta di prick test</Bottone>}
+        azioniExtra={<>
+          <Bottone onClick={() => setPannello('prick')}>Seduta di prick test</Bottone>
+          <Bottone onClick={() => setPannello('ige')}>IgE totali e specifiche</Bottone>
+          <Bottone onClick={() => setPannello('molecolare')}>IgE molecolari (ISAC / ALEX)</Bottone>
+        </>}
         riassunto={(r: RigaAllergo) => (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="w-24 tabular-nums text-slate-500">{giorno(r.data)}</span>
             <span className="font-medium text-slate-900">{s(r, 'allergene')}</span>
             <span className="text-slate-500">{TIPI_TEST[s(r, 'tipo')]}</span>
-            {r.valore != null && <span className="tabular-nums">{s(r, 'valore')} {s(r, 'unita')}</span>}
+            {r.valore != null && <span className="tabular-nums">{s(r, 'valore').replace('.', ',')} {s(r, 'unita')}</span>}
+            {r.metodica ? <span className="text-xs text-slate-500">{s(r, 'metodica')}{r.data_prelievo ? ` · prelievo del ${giorno(r.data_prelievo)}` : ''}</span> : null}
             {r.esito ? <Badge tono={TONO_ESITO[r.esito as keyof typeof TONO_ESITO]}>{s(r, 'esito')}</Badge> : null}
             {r.note ? <span className="w-full text-xs text-slate-500">{s(r, 'note')}</span> : null}
           </div>
         )}
       />
-      {pannello && (
-        <Finestra titolo="Seduta di prick test" onChiudi={() => setPannello(false)} larga>
-          <PannelloPrick pseudo={pseudo} onFatto={() => { setPannello(false); setVersione((v) => v + 1); onCambio?.(); }} />
+      {pannello === 'prick' && (
+        <Finestra titolo="Seduta di prick test" onChiudi={() => setPannello(null)} larga>
+          <PannelloPrick pseudo={pseudo} onFatto={fatto} />
+        </Finestra>
+      )}
+      {pannello === 'ige' && (
+        <Finestra titolo="IgE totali e specifiche" onChiudi={() => setPannello(null)} larga="xl">
+          <PannelloIgE pseudo={pseudo} onFatto={fatto} />
+        </Finestra>
+      )}
+      {pannello === 'molecolare' && (
+        <Finestra titolo="IgE su componenti molecolari" onChiudi={() => setPannello(null)} larga="xl">
+          <PannelloMolecolare pseudo={pseudo} onFatto={fatto} />
         </Finestra>
       )}
     </>

@@ -7,3 +7,4 @@ export * from './crescita';
 export * from './csv';
 export * from './crescita-cacciari';
 export * from './allergologia';
+export * from './molecolare';
