@@ -152,7 +152,7 @@ export const CAMPI_CARTELLA: Campo[] = [
   // Abitazione, fumo passivo, alimentazione, farmaci, sport e sonno: menu guidati (AnamnesiGuidata).
   { nome: 'animali', etichetta: 'Animali domestici', tipo: 'testo', segnaposto: 'Es. un cane fuori casa' },
   { nome: 'comunita', etichetta: 'Comunità', tipo: 'testo', segnaposto: 'Nido, scuola' },
-  { nome: 'note', etichetta: 'Note', tipo: 'area' },
+  { nome: 'note', etichetta: 'Note interne (non stampate nel referto)', tipo: 'area' },
 ];
 
 /** Allergeni frequenti per il pannello rapido di prick test (inalanti del Centro-Sud e alimenti). */

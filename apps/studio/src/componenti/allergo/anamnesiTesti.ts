@@ -52,7 +52,7 @@ export function testiDaScelte(s: Scelte): TestiAnamnesi {
       const chi = f.chi.includes('Entrambi i genitori')
         ? ['padre e madre', ...f.chi.filter((x) => x !== 'Entrambi i genitori' && x !== 'Madre' && x !== 'Padre').map((x) => x.toLowerCase())]
         : f.chi.map((x) => x.toLowerCase());
-      fumo = `SI${chi.length ? ` (${chi.join(', ')})` : ''}${f.ecig ? ', anche sigarette elettroniche' : ''}`;
+      fumo = `SÌ${chi.length ? ` (${chi.join(', ')})` : ''}${f.ecig ? ', anche sigarette elettroniche' : ''}`;
       if (f.note.trim()) fumo = `${fumo}. ${maiuscola(f.note.trim())}`;
     } else fumo = f.note.trim();
   }

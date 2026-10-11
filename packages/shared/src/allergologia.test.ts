@@ -77,13 +77,16 @@ describe('test e anafilassi', () => {
     expect(livelloFeno(38, 9)).toBe('elevato');
     expect(livelloFeno(38, 14)).toBe('intermedio');
   });
-  it('criteri di anafilassi', () => {
+  it('criteri di anafilassi (WAO 2020)', () => {
     const nessuno = { cute_mucose: false, respiratorio: false, cardiovascolare: false, gastrointestinale: false };
     expect(criteriAnafilassi({ ...nessuno, cute_mucose: true }, true).compatibile).toBe(false);
     expect(criteriAnafilassi({ ...nessuno, cute_mucose: true, respiratorio: true }, false).compatibile).toBe(true);
-    expect(criteriAnafilassi({ ...nessuno, gastrointestinale: true, respiratorio: true }, true).compatibile).toBe(true);
+    expect(criteriAnafilassi({ ...nessuno, cute_mucose: true, gastrointestinale: true }, false).compatibile).toBe(true);
+    expect(criteriAnafilassi({ ...nessuno, respiratorio: true }, true).compatibile).toBe(true); // broncospasmo isolato
+    expect(criteriAnafilassi({ ...nessuno, respiratorio: true }, false).compatibile).toBe(false);
     expect(criteriAnafilassi({ ...nessuno, cardiovascolare: true }, true).compatibile).toBe(true);
     expect(criteriAnafilassi({ ...nessuno, cardiovascolare: true }, false).compatibile).toBe(false);
+    expect(criteriAnafilassi({ ...nessuno, gastrointestinale: true, respiratorio: true }, false).compatibile).toBe(false);
   });
   it('dose dell’autoiniettore per peso', () => {
     expect(doseAutoiniettore(6).dose).toBe(null);

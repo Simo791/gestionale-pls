@@ -72,6 +72,10 @@ const AZIONI: Record<string, string> = {
   LETTURA_CODICE_FISCALE: 'Lettura codice fiscale',
   COLLEGAMENTO_TUTORE: 'Collegamento account genitore',
   IMPORTA_CATALOGO_PRESTAZIONI: 'Importazione catalogo prestazioni',
+  AGGIUNTA_MEMBRO_STAFF: 'Aggiunta membro dello staff',
+  ATTIVAZIONE_ALLERGOLOGIA: 'Attivazione modulo Allergologia',
+  DISATTIVAZIONE_ALLERGOLOGIA: 'Disattivazione modulo Allergologia',
+  APERTURA_CARTELLA_ALLERGO: 'Apertura cartella allergologica',
 };
 export const etichettaAzione = (a: string) => AZIONI[a] ?? a;
 
@@ -92,6 +96,22 @@ const TABELLE: Record<string, string> = {
   'anagrafica.pediatri': 'Profilo del medico',
   'anagrafica.studi': 'Dati dello studio',
   'anagrafica.catalogo_prestazioni': 'Catalogo prestazioni',
+  'anagrafica.catalogo_patologie': 'Catalogo patologie',
+  'anagrafica.catalogo_diagnosi': 'Catalogo diagnosi',
+  'anagrafica.membri_studio': 'Staff dello studio',
+  'anagrafica.sostituzioni': 'Sostituzione',
+  'anagrafica.richiami': 'Da ricontattare',
+  'anagrafica.modelli_testo': 'Modelli di testo',
+  'anagrafica.regole_promemoria': 'Regole dei promemoria',
+  'clinica.certificati': 'Certificato',
+  'anagrafica.allergo_pazienti': 'Anagrafica paziente allergologico',
+  'anagrafica.allergo_modelli': 'Modelli allergologia',
+  'anagrafica.allergo_impostazioni': 'Impostazioni referto allergologia',
+  'clinica.allergo_cartelle': 'Cartella allergologica',
+  'clinica.allergo_visite': 'Visita allergologica',
+  'clinica.allergo_test': 'Test allergologico',
+  'clinica.allergo_punteggi': 'Punteggio (SCORAD, ACT…)',
+  'clinica.allergo_spirometrie': 'Spirometria',
 };
 
 export const ETICHETTA_TIPO_VISITA: Record<TipoVisita, string> = {

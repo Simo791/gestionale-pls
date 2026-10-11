@@ -11,8 +11,8 @@ export function SuggerimentoCriteri({ v }: { v: Valori }) {
     v.causa_categoria !== '' && v.causa_categoria !== 'idiopatica',
   );
   return r.compatibile
-    ? <p className="rounded-lg bg-rose-50 p-2 text-sm text-rose-900">Quadro compatibile con i criteri clinici di anafilassi (EAACI 2021): {r.criterio}. La conferma spetta al medico.</p>
-    : <p className="rounded-lg bg-slate-50 p-2 text-sm text-slate-600">Con i sintomi indicati i criteri EAACI 2021 di anafilassi non risultano soddisfatti.</p>;
+    ? <p className="rounded-lg bg-rose-50 p-2 text-sm text-rose-900">Quadro compatibile con i criteri clinici di anafilassi (WAO 2020, EAACI 2021): {r.criterio}. La conferma spetta al medico.</p>
+    : <p className="rounded-lg bg-slate-50 p-2 text-sm text-slate-600">Con i sintomi e la causa indicati i criteri di anafilassi (WAO 2020, EAACI 2021) non risultano soddisfatti: la valutazione resta del medico.</p>;
 }
 
 export default function Anafilassi({ pseudo, pesoKg, onCambio }: { pseudo: string; pesoKg: number | null; onCambio?: () => void }) {

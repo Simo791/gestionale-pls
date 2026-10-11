@@ -10,7 +10,7 @@ interface Voce {
   etichetta: string;
   icona: string; // percorso SVG (24x24, stroke)
   soloPediatra?: boolean;
-  /** Solo per chi è abilitato al modulo Allergologia. */
+  /** Per chi è abilitato al modulo Allergologia e sempre per l'amministratore (che lo attiva da lì). */
   allergologia?: boolean;
 }
 
@@ -48,7 +48,7 @@ export default function Layout({
   // L'allergologo usa solo il suo modulo; gli altri vedono Allergologia solo se abilitati.
   const voci = claims.app_ruolo === 'allergologo'
     ? VOCI.filter((v) => v.sezione === 'allergologia' || v.sezione === 'account')
-    : VOCI.filter((v) => (!v.soloPediatra || claims.app_ruolo === 'pediatra') && (!v.allergologia || claims.app_allergologia));
+    : VOCI.filter((v) => (!v.soloPediatra || claims.app_ruolo === 'pediatra') && (!v.allergologia || claims.app_allergologia || (claims.app_admin && (claims.app_ruolo === 'pediatra' || claims.app_ruolo === 'allergologo'))));
 
   const menu = (
     <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Menu principale">

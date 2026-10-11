@@ -149,7 +149,7 @@ export default function SchedaAllergologica({ id, claims }: { id: string; claims
 
       {scheda === 'visite' && editor && t && (
         <VisitaAllergologica pseudo={ps} paziente={p} visita={editor === 'nuova' ? null : editor} visite={t.visite}
-          onChiudi={() => setEditor(null)} onSalvata={() => { setEditor(null); cambia(); }} />
+          onChiudi={() => { setEditor(null); cambia(); }} onSalvata={() => { setEditor(null); cambia(); }} />
       )}
       {scheda === 'visite' && !editor && (
         <div className="space-y-6">
@@ -296,7 +296,7 @@ function Riepilogo({ t, peso, eta, vai }: { t: Tutto; peso: number | null; eta: 
       </Pannello>
 
       <Pannello titolo="Allerte">
-        {avvisi.length === 0 && anafilassi === 0 && !(controllo && Number(controllo.punteggio) < 20 && controllo.scala === 'c_act') ? <Vuoto testo="Nessuna allerta." /> : (
+        {avvisi.length === 0 && anafilassi === 0 && !(controllo && Number(controllo.punteggio) <= 19) ? <Vuoto testo="Nessuna allerta." /> : (
           <ul className="space-y-1 text-sm">
             {anafilassi > 0 && <li className="text-rose-700">{anafilassi} {anafilassi === 1 ? 'episodio' : 'episodi'} di anafilassi registrati.</li>}
             {avvisi.map((a) => <li key={a.testo} className={a.tono === 'errore' ? 'text-rose-700' : 'text-amber-700'}>{a.testo}</li>)}

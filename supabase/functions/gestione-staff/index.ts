@@ -40,6 +40,12 @@ Deno.serve(async (req) => {
     return risposta({ errore: 'Solo l\'amministratore dello studio può aggiungere membri' }, 403);
   }
   if (claims.aal !== 'aal2') return risposta({ errore: 'Serve il secondo fattore di autenticazione' }, 403);
+  // Il token può avere fino a un'ora: si ricontrolla nel database che sia ancora amministratore attivo.
+  const { data: io } = await admin.schema('anagrafica').from('membri_studio').select('amministratore, attivo, studio_id')
+    .eq('utente_id', chi.user.id).maybeSingle();
+  if (!io || !io.attivo || !io.amministratore || io.studio_id !== claims.app_studio_id) {
+    return risposta({ errore: 'Non sei più amministratore dello studio: esci e rientra' }, 403);
+  }
 
   const { email, nome, cognome, ruolo } = await req.json().catch(() => ({}));
   const em = String(email ?? '').trim().toLowerCase();
@@ -51,9 +57,12 @@ Deno.serve(async (req) => {
   let utenteId: string | undefined;
   const creato = await admin.auth.admin.createUser({ email: em, email_confirm: true });
   if (creato.error) {
-    // Utente già esistente: lo cerchiamo (prime pagine sono sufficienti per uno studio).
-    const { data: elenco } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    utenteId = elenco?.users.find((u) => u.email?.toLowerCase() === em)?.id;
+    // Utente già esistente: lo cerchiamo scorrendo tutte le pagine degli utenti.
+    for (let pagina = 1; !utenteId && pagina <= 50; pagina++) {
+      const { data: elenco } = await admin.auth.admin.listUsers({ page: pagina, perPage: 1000 });
+      if (!elenco?.users.length) break;
+      utenteId = elenco.users.find((u) => u.email?.toLowerCase() === em)?.id;
+    }
     if (!utenteId) return risposta({ errore: `Creazione utente non riuscita: ${creato.error.message}` }, 400);
   } else {
     utenteId = creato.data.user.id;
@@ -64,9 +73,12 @@ Deno.serve(async (req) => {
   if (esistente && esistente.studio_id !== claims.app_studio_id) {
     return risposta({ errore: 'Questa email appartiene a un altro studio' }, 409);
   }
-  if (esistente && esistente.ruolo === 'pediatra') return risposta({ errore: 'Questa email è di un pediatra titolare' }, 409);
-  const { data: tutore } = await db.from('tutori').select('id').eq('utente_id', utenteId).maybeSingle();
-  if (tutore) return risposta({ errore: 'Questa email è già usata da un genitore: usa un\'email diversa per lo staff' }, 409);
+  if (esistente) {
+    // Niente cambi di ruolo o riattivazioni da qui: si usano i pulsanti della lista dello staff.
+    return risposta({ errore: 'Questa persona è già nello staff dello studio: gestiscila dalla lista' }, 409);
+  }
+  const { data: tutori } = await db.from('tutori').select('id').eq('utente_id', utenteId).limit(1);
+  if (tutori?.length) return risposta({ errore: 'Questa email è già usata da un genitore: usa un\'email diversa per lo staff' }, 409);
 
   const { error } = await db.from('membri_studio').upsert({
     utente_id: utenteId, studio_id: claims.app_studio_id, ruolo, attivo: true,

@@ -1,12 +1,17 @@
-import { etaLeggibile, type Appuntamento, type FiglioPortale, type Misurazione } from '@pls/shared';
+import { etaLeggibile, type FiglioPortale } from '@pls/shared';
 import { useEffect, useState } from 'react';
 import { esci } from '../lib/sessione';
 import { supabase } from '../lib/supabase';
 
+interface ProssimoAppuntamento { id: string; inizio: string; fine: string; tipo: string; stato: 'richiesto' | 'confermato' }
+
 interface DatiFiglio {
   figlio: FiglioPortale;
-  ultimaMisura: Misurazione | null;
-  prossimo: Appuntamento | null;
+  peso: number | null;
+  altezza: number | null;
+  /** Prossimo appuntamento confermato e, se c'è, richiesta in attesa di conferma. */
+  prossimo: ProssimoAppuntamento | null;
+  inAttesa: ProssimoAppuntamento | null;
 }
 
 interface Accesso {
@@ -15,7 +20,8 @@ interface Accesso {
   azione: string;
 }
 
-const oggiISO = () => new Date().toISOString().slice(0, 10);
+/** Data di oggi nel fuso locale (toISOString darebbe il giorno UTC). */
+const oggiISO = () => new Date().toLocaleDateString('sv-SE');
 
 /**
  * Portale genitori, Fase 0: elenco dei figli visibili (relazione valida + consenso
@@ -24,33 +30,48 @@ const oggiISO = () => new Date().toISOString().slice(0, 10);
 export default function Figli() {
   const [dati, setDati] = useState<DatiFiglio[] | null>(null);
   const [registro, setRegistro] = useState<{ nome: string; righe: Accesso[] } | null>(null);
+  const [errore, setErrore] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
-      const { data } = await supabase.schema('api').rpc('miei_figli');
-      const figli = (data ?? []) as FiglioPortale[];
-      const risultati = await Promise.all(
-        figli.map(async (figlio): Promise<DatiFiglio> => {
-          const [misure, appuntamenti] = await Promise.all([
-            supabase.schema('clinica').from('misurazioni').select('*')
-              .eq('pseudo_id', figlio.pseudo_id).order('eta_giorni', { ascending: false }).limit(1),
-            supabase.schema('anagrafica').from('appuntamenti').select('*')
-              .eq('paziente_id', figlio.paziente_id).gte('inizio', new Date().toISOString())
-              .order('inizio').limit(1),
-          ]);
-          return {
-            figlio,
-            ultimaMisura: ((misure.data ?? []) as Misurazione[])[0] ?? null,
-            prossimo: ((appuntamenti.data ?? []) as Appuntamento[])[0] ?? null,
-          };
-        }),
-      );
-      setDati(risultati);
+      try {
+        const { data, error } = await supabase.schema('api').rpc('miei_figli');
+        if (error) throw new Error(error.message);
+        const figli = (data ?? []) as FiglioPortale[];
+        const ultimo = async (colonna: 'peso_kg' | 'altezza_cm', pseudo: string) => {
+          const r = await supabase.schema('clinica').from('misurazioni').select(colonna)
+            .eq('pseudo_id', pseudo).not(colonna, 'is', null).order('eta_giorni', { ascending: false }).limit(1);
+          if (r.error) throw new Error(r.error.message);
+          return ((r.data ?? [])[0] as Record<string, number> | undefined)?.[colonna] ?? null;
+        };
+        const risultati = await Promise.all(
+          figli.map(async (figlio): Promise<DatiFiglio> => {
+            // Gli appuntamenti arrivano da una RPC che restituisce solo data, tipo e stato
+            // (le note interne dello studio non escono mai verso il portale).
+            const [peso, altezza, app] = await Promise.all([
+              ultimo('peso_kg', figlio.pseudo_id), ultimo('altezza_cm', figlio.pseudo_id),
+              supabase.schema('api').rpc('appuntamenti_figlio', { p_paziente_id: figlio.paziente_id }),
+            ]);
+            if (app.error) throw new Error(app.error.message);
+            const elenco = (app.data ?? []) as ProssimoAppuntamento[];
+            return {
+              figlio, peso, altezza,
+              prossimo: elenco.find((a) => a.stato === 'confermato') ?? null,
+              inAttesa: elenco.find((a) => a.stato === 'richiesto') ?? null,
+            };
+          }),
+        );
+        setDati(risultati);
+      } catch (e) {
+        setErrore(e instanceof Error ? e.message : String(e));
+        setDati([]);
+      }
     })();
   }, []);
 
   async function mostraRegistro(figlio: FiglioPortale) {
-    const { data } = await supabase.schema('api').rpc('registro_accessi', { p_paziente_id: figlio.paziente_id });
+    const { data, error } = await supabase.schema('api').rpc('registro_accessi', { p_paziente_id: figlio.paziente_id });
+    if (error) return setErrore(`Registro accessi non disponibile: ${error.message}`);
     setRegistro({ nome: figlio.nome, righe: (data ?? []) as Accesso[] });
   }
 
@@ -62,24 +83,29 @@ export default function Figli() {
       </header>
 
       {dati === null && <p className="text-slate-500">Caricamento…</p>}
-      {dati?.length === 0 && (
+      {errore && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-900">Si è verificato un errore: {errore}. Riprova più tardi.</p>}
+      {dati?.length === 0 && !errore && (
         <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
           Nessun figlio visibile. Lo studio deve registrare il collegamento e il tuo consenso all'uso del portale.
         </p>
       )}
 
       <ul className="space-y-4">
-        {dati?.map(({ figlio, ultimaMisura, prossimo }) => (
+        {dati?.map(({ figlio, peso, altezza, prossimo, inAttesa }) => (
           <li key={figlio.paziente_id} className="rounded-xl border border-slate-200 bg-white p-4">
             <p className="text-lg font-medium">{figlio.nome}</p>
             <p className="mb-3 text-sm text-slate-500">{etaLeggibile(figlio.data_nascita, oggiISO())}</p>
             <dl className="grid grid-cols-2 gap-2 text-sm">
               <dt className="text-slate-500">Ultimo peso</dt>
-              <dd>{ultimaMisura?.peso_kg ? `${ultimaMisura.peso_kg} kg` : '—'}</dd>
+              <dd>{peso != null ? `${String(peso).replace('.', ',')} kg` : '—'}</dd>
               <dt className="text-slate-500">Ultima altezza</dt>
-              <dd>{ultimaMisura?.altezza_cm ? `${ultimaMisura.altezza_cm} cm` : '—'}</dd>
+              <dd>{altezza != null ? `${String(altezza).replace('.', ',')} cm` : '—'}</dd>
               <dt className="text-slate-500">Prossimo appuntamento</dt>
               <dd>{prossimo ? new Date(prossimo.inizio).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</dd>
+              {inAttesa && <>
+                <dt className="text-slate-500">Richiesta in attesa</dt>
+                <dd>{new Date(inAttesa.inizio).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' })} (da confermare)</dd>
+              </>}
             </dl>
             <button onClick={() => void mostraRegistro(figlio)} className="mt-3 text-sm text-sky-700 underline">
               Chi ha consultato i dati

@@ -50,7 +50,7 @@ export const PACCHETTI: Pacchetto[] = [
     modelli: ['asma_eo', 'asma_conclusioni', 'diario', 'fumo', 'profilassi_acari', 'asma_piano_azione', 'asma_fondo_ics', 'asma_controllo_spiro'],
     strumenti: ['prick', 'spirometria', 'c_act'] },
   { codice: 'asma_ragazzo', nome: 'Ragazzo con asma (≥ 12 anni)', descrizione: 'Terapia di fondo e al bisogno con budesonide/formoterolo (MART)',
-    modelli: ['asma_eo', 'asma_conclusioni', 'diario', 'profilassi_acari', 'asma_mart', 'rinite', 'asma_vaccino', 'asma_controllo_spiro'],
+    modelli: ['asma_eo', 'asma_conclusioni', 'diario', 'profilassi_acari', 'asma_mart', 'rinite_12', 'asma_vaccino', 'asma_controllo_spiro'],
     strumenti: ['prick', 'spirometria', 'act'] },
   { codice: 'rinite', nome: 'Rinocongiuntivite allergica', descrizione: 'Antistaminico, steroide nasale, collirio a gradini; profilassi ambientale',
     modelli: ['rinite_eo', 'diario', 'fumo', 'profilassi_pollini', 'profilassi_acari', 'rinite', 'orl', 'controllo'],

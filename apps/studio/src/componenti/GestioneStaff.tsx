@@ -103,7 +103,7 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
                     <Badge tono={m.ruolo === 'pediatra' ? 'info' : 'neutro'}>{etichettaRuolo(m.ruolo)}</Badge>
                     {m.amministratore && <Badge tono="ok">Amministratore</Badge>}
                     {!m.attivo && <Badge tono="attenzione">Disattivato</Badge>}
-                    {m.attivo && m.utente_id !== claims.sub && (
+                    {m.attivo && m.utente_id !== claims.sub && !(m.amministratore && m.ruolo === 'pediatra' && claims.app_ruolo !== 'pediatra') && (
                       <Bottone onClick={() => void amministratore(m, !m.amministratore)}>
                         {m.amministratore ? 'Togli amministratore' : 'Rendi amministratore'}
                       </Bottone>
@@ -119,8 +119,10 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
             </ul>
           )}
           <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-            <span className="flex-1">Fase beta: puoi nominare amministratore qualunque membro. L'amministratore gestisce staff e moduli e accede
-              all'Allergologia, ma non apre le cartelle degli assistiti (restano al pediatra titolare e al sostituto in servizio).</span>
+            <span className="flex-1">Fase beta: puoi nominare amministratore qualunque membro. L'amministratore gestisce staff e moduli, ma
+              non apre le cartelle degli assistiti (restano al pediatra titolare e al sostituto in servizio); all'Allergologia accedono
+              solo pediatri e allergologi. Per disattivare un amministratore togli prima il ruolo; solo un pediatra amministratore può
+              toglierlo a un pediatra.</span>
             <Bottone onClick={() => void tuttiAmministratori()}>Rendi tutti amministratori</Bottone>
           </div>
           <form onSubmit={(e) => void aggiungi(e)} className="mt-4 grid gap-3 rounded-lg border border-slate-200 p-3 md:grid-cols-2">

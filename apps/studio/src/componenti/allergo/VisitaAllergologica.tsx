@@ -19,15 +19,15 @@ type Campi = {
   diagnosi_testo: string; piano: string; prossimo_controllo: string;
 };
 type CampiCartella = Record<'anamnesi_familiare' | 'anamnesi_fisiologica' | 'anamnesi_remota' | 'abitazione' |
-  'animali' | 'fumo_dettaglio' | 'farmaci' | 'alimentazione' | 'sport' | 'sonno', string>;
+  'animali' | 'fumo_dettaglio' | 'farmaci' | 'alimentazione' | 'sport' | 'sonno' | 'comunita', string>;
 
 export const VOCI_CARTELLA: [keyof CampiCartella, string][] = [
   ['anamnesi_familiare', 'Anamnesi familiare'], ['anamnesi_fisiologica', 'Anamnesi fisiologica'], ['anamnesi_remota', 'Anamnesi patologica remota'],
   ['abitazione', 'Abitazione'], ['animali', 'Animali domestici'], ['fumo_dettaglio', 'Fumo passivo'], ['farmaci', 'Farmaci'],
-  ['alimentazione', 'Alimentazione'], ['sport', 'Sport'], ['sonno', 'Sonno'],
+  ['alimentazione', 'Alimentazione'], ['sport', 'Sport'], ['sonno', 'Sonno'], ['comunita', 'Comunità'],
 ];
 /** Voci a testo libero; le altre (abitazione, fumo, alimenti, farmaci, sport, sonno) hanno i menu guidati. */
-const VOCI_LIBERE: (keyof CampiCartella)[] = ['anamnesi_familiare', 'anamnesi_fisiologica', 'anamnesi_remota', 'animali'];
+const VOCI_LIBERE: (keyof CampiCartella)[] = ['anamnesi_familiare', 'anamnesi_fisiologica', 'anamnesi_remota', 'animali', 'comunita'];
 
 const oraLocale = (iso?: string) => {
   const d = iso ? new Date(iso) : new Date();
@@ -121,7 +121,7 @@ function FinestraResoconto({ pseudo, visite, primaDel, controllo, onInserisci, o
   const [testo, setTesto] = useState<string | null>(null);
   const generato = dati.dati ? resocontoVisite(visite, dati.dati, o, primaDel) : '';
   const valore = testo ?? generato;
-  const [campo, setCampo] = useState<keyof Campi>(controllo ? 'anamnesi' : 'anamnesi');
+  const [campo, setCampo] = useState<keyof Campi>('anamnesi');
   const casella = (k: Exclude<keyof OpzioniResoconto, 'piano'>, t: string) => (
     <label className="flex items-center gap-2"><input type="checkbox" checked={o[k]} onChange={(e) => { setO({ ...o, [k]: e.target.checked }); setTesto(null); }} /> {t}</label>
   );
@@ -170,6 +170,13 @@ function FinestraResoconto({ pseudo, visite, primaDel, controllo, onInserisci, o
   );
 }
 
+/** Dal piano copiato nel controllo toglie le righe con la data del controllo precedente. */
+function senzaControlloPrecedente(piano: string): string {
+  return piano.split('\n')
+    .filter((r) => !/^\s*-?\s*(visita di controllo|controllo clinico \+ spirometria)\b/i.test(r))
+    .join('\n').trim();
+}
+
 /**
  * Visita allergologica (prima visita o controllo) con la struttura dei referti
  * dell'ambulatorio. Nel controllo è sempre visibile la visita precedente.
@@ -199,7 +206,7 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
       data: oraLocale(), tipo: controllo ? 'controllo' : 'prima_visita', motivo: controllo ? 'Controllo clinico' : 'Prima visita allergologica',
       anamnesi: '', decorso: '', esame_obiettivo: '', peso_kg: '', altezza_cm: '', saturazione: '', test_eseguiti: '', conclusioni: '',
       // Nel controllo diagnosi e piano partono da quelli della visita precedente.
-      diagnosi_testo: controllo ? s(precedente, 'diagnosi_testo') : '', piano: controllo ? s(precedente, 'piano') : '', prossimo_controllo: '',
+      diagnosi_testo: controllo ? s(precedente, 'diagnosi_testo') : '', piano: controllo ? senzaControlloPrecedente(s(precedente, 'piano')) : '', prossimo_controllo: '',
     };
   });
   const imposta = (k: keyof Campi, v: string) => setF((x) => ({ ...x, [k]: v }));
@@ -306,7 +313,10 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
         saturazione: n(f.saturazione), test_eseguiti: t(f.test_eseguiti), conclusioni: t(f.conclusioni), diagnosi_testo: t(f.diagnosi_testo),
         piano: t(f.piano), prossimo_controllo: t(f.prossimo_controllo), modelli: usati,
         visita_precedente_id: f.tipo === 'prima_visita' ? null : precedente?.id ?? null,
-        anamnesi_snapshot: valoriCartella, aggiornata_il: new Date().toISOString(),
+        // La copia dell'anamnesi si scrive per le visite nuove o se l'anamnesi è stata modificata,
+        // e mai prima che la cartella sia caricata (non si sovrascrive lo storico di una visita vecchia).
+        ...((!visita || anamnesi || scelte) && cartella.dati ? { anamnesi_snapshot: valoriCartella } : {}),
+        aggiornata_il: new Date().toISOString(),
       };
       const tab = supabase.schema('clinica').from('allergo_visite');
       const { data, error } = visita
@@ -326,7 +336,11 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
 
   return (
     <>
-    <form onSubmit={(e) => void salva(e)} className="space-y-4">
+    <form onSubmit={(e) => void salva(e)} className="space-y-4"
+          onKeyDown={(e) => {
+            // Invio in un campo di testo non deve salvare e chiudere la visita.
+            if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') e.preventDefault();
+          }}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold text-slate-900">{visita ? 'Modifica visita' : controllo ? 'Nuovo controllo clinico' : 'Prima visita allergologica'}</h2>
         <div className="flex gap-2">
@@ -396,7 +410,7 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
             {cartellaAperta ? (
               <div className="space-y-3">
                 {VOCI_CARTELLA.filter(([k]) => VOCI_LIBERE.includes(k)).map(([k, t]) => (
-                  <Area key={k} etichetta={t} valore={valoriCartella[k]} righe={k === 'animali' ? 1 : 3}
+                  <Area key={k} etichetta={t} valore={valoriCartella[k]} righe={k === 'animali' || k === 'comunita' ? 1 : 3}
                         onChange={(v) => setAnamnesi({ ...valoriCartella, [k]: v })} />
                 ))}
                 {cartella.dati && (
@@ -408,7 +422,7 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
             )}
           </Pannello>
 
-          <div id="sez-anamnesi" className={cornice(controllo ? 'decorso' : 'anamnesi')}><span id="sez-decorso" />
+          <div id="sez-anamnesi" className={evidenzia === 'anamnesi' || evidenzia === 'decorso' ? cornice(String(evidenzia)) : cornice('anamnesi')}><span id="sez-decorso" />
           <Pannello titolo={controllo ? 'Controllo clinico' : 'Anamnesi patologica prossima'}
                     azione={precedenti.length > 0 ? <Bottone onClick={() => setResoconto(true)}>📋 Resoconto visite precedenti</Bottone> : undefined}>
             <div className="space-y-3">
@@ -467,7 +481,7 @@ export default function VisitaAllergologica({ pseudo, paziente, visita, visite, 
           <Pannello titolo="Piano di cura">
             <Area etichetta="Indicazioni e terapia" aiuto="Le righe che iniziano con «-» diventano un elenco puntato nel referto" valore={f.piano} righe={16} onChange={(v) => imposta('piano', v)} />
             <label className="mt-3 block w-56 text-sm"><span className="block text-slate-500">Prossimo controllo</span>
-              <input type="date" min={oggi()} value={f.prossimo_controllo} onChange={(e) => imposta('prossimo_controllo', e.target.value)} className={stileInput} /></label>
+              <input type="date" min={visita ? undefined : oggi()} value={f.prossimo_controllo} onChange={(e) => imposta('prossimo_controllo', e.target.value)} className={stileInput} /></label>
           </Pannello>
           </div>
 

@@ -38,8 +38,10 @@ export function datiDelGiorno(giorno: string, d: DatiGiornata) {
     punteggi: delGiorno(d.punteggi),
     /** Testo libero dei test da stampare solo se il medico l'ha cambiato rispetto a quello generato dai dati. */
     noteLibere: (testoEseguiti: unknown) => {
-      const t = String(testoEseguiti ?? '').trim();
-      return t && t !== testoTest(giorno, d).trim() ? t : '';
+      // Stampa solo le righe aggiunte dal medico: quelle generate dai dati sono già nelle tabelle.
+      const generate = new Set(testoTest(giorno, d).split('\n').map((r) => r.trim()).filter(Boolean));
+      return String(testoEseguiti ?? '').split('\n').map((r) => r.trimEnd())
+        .filter((r) => r.trim() && !generate.has(r.trim())).join('\n').trim();
     },
   };
 }
@@ -103,7 +105,7 @@ export function TabellaPrick({ righe, stile }: { righe: RigaAllergo[]; stile: St
 export function TabellaIgE({ righe, stile }: { righe: RigaAllergo[]; stile: StileTabella }) {
   return (
     <Tabella stile={stile} intestazioni={['Allergene / componente', 'Esame', 'Valore', 'Unità']} allinea={['l', 'l', 'r', 'l']}
-      righe={righe.map((r) => [String(r.allergene), TIPO_TEST[String(r.tipo)] ?? String(r.tipo), n(r.valore), String(r.unita ?? 'kUA/L')])} />
+      righe={righe.map((r) => [String(r.allergene), TIPO_TEST[String(r.tipo)] ?? String(r.tipo), n(r.valore), String(r.unita ?? (r.tipo === 'ige_totali' ? 'kU/L' : 'kUA/L'))])} />
   );
 }
 
@@ -121,8 +123,8 @@ export function TabellaSpirometria({ s, stile }: { s: RigaAllergo; stile: StileT
   if (s.fvc_l != null || s.fvc_pct != null) righe.push(['FVC', s.fvc_l != null ? `${n(s.fvc_l)} L` : '—', s.fvc_pct != null ? `${n(s.fvc_pct, 1)}%` : '—']);
   if (s.fev1_fvc != null) righe.push(['FEV₁/FVC', `${n(s.fev1_fvc, 1)}%`, '']);
   if (s.fef2575_pct != null) righe.push(['FEF₂₅₋₇₅', '—', `${n(s.fef2575_pct, 1)}%`]);
-  if (s.fev1_post_l != null) righe.push(['FEV₁ dopo broncodilatatore', `${n(s.fev1_post_l)} L`,
-    s.reversibilita_pct != null ? `variazione ${Number(s.reversibilita_pct) > 0 ? '+' : ''}${n(s.reversibilita_pct, 1)}%` : '']);
+  if (s.fev1_post_l != null) righe.push(['FEV₁ dopo broncodilatatore', `${n(s.fev1_post_l)} L`, '']);
+  if (s.reversibilita_pct != null) righe.push(['Variazione del FEV₁ dopo broncodilatatore', `${Number(s.reversibilita_pct) > 0 ? '+' : ''}${n(s.reversibilita_pct, 1)}%`, '']);
   if (s.feno_ppb != null) righe.push(['FeNO', `${s.feno_ppb} ppb`, '']);
   return (
     <div>

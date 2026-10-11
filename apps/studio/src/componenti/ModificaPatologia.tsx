@@ -30,6 +30,7 @@ export default function ModificaPatologia({ p, onFatto }: { p: Patologia; onFatt
     if (f.esenzione && !(p.tipo === 'rara' ? /^R[A-Z0-9]{5}$/ : /^0?[A-Z0-9]{3}$/).test(f.esenzione.trim())) {
       return setErrore(p.tipo === 'rara' ? 'Il codice di malattia rara ha la forma R + 5 caratteri (es. RN0680).' : 'Il codice di patologia cronica ha 3 caratteri (es. 059) o 4 (es. 0A02).');
     }
+    if (f.orpha.trim() && !/^\d+$/.test(f.orpha.trim())) return setErrore('L\'ORPHAcode è solo un numero (es. 3389).');
     const fonti = aRighe(f.fonti).map((r) => { const [titolo, url] = r.split('|').map((x) => x.trim()); return { titolo: titolo ?? '', url: url ?? '' }; });
     if (fonti.some((x) => !/^https?:\/\//.test(x.url))) return setErrore('Ogni fonte va scritta come «titolo | https://indirizzo».');
     const { error } = await supabase.schema('anagrafica').from('catalogo_patologie').update({

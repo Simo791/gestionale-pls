@@ -21,9 +21,6 @@ const BORDO = { test: '#f59e0b', respiro: '#3b82f6', punteggi: '#a855f7', piano:
 
 const num = (v: unknown, d = 1) => Number(v).toLocaleString('it-IT', { maximumFractionDigits: d });
 const dataIt = (iso: unknown) => new Date(String(iso).length === 10 ? `${iso}T12:00:00` : String(iso)).toLocaleDateString('it-IT');
-const dataLunga = (iso: unknown) => new Date(String(iso).length === 10 ? `${iso}T12:00:00` : String(iso))
-  .toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-
 const Titolo = ({ children }: { children: ReactNode }) => (
   <h2 className="mb-1 mt-3 border-b border-slate-400 pb-0.5 text-[10.5pt] font-bold uppercase tracking-wide text-slate-900" style={{ breakAfter: 'avoid' }}>{children}</h2>
 );
@@ -139,7 +136,7 @@ export function RefertoGrafico({ impostazioni, studio, paziente, codiceFiscale, 
       <table className="w-full border-collapse text-[10pt]">
         <tbody>
           <tr><th className={testa}>Paziente</th><td className={`${cella} font-semibold`}>{paziente.cognome} {paziente.nome}</td>
-            <th className={testa}>Visita</th><td className={cella}>{controllo ? 'Controllo clinico' : 'Prima visita'}</td></tr>
+            <th className={testa}>Visita</th><td className={cella}>{({ prima_visita: 'Prima visita', controllo: 'Controllo clinico', urgenza: 'Visita urgente', test: 'Seduta di test', altro: 'Visita' } as Record<string, string>)[String(visita.tipo)] ?? 'Visita'}</td></tr>
           <tr><th className={testa}>{paziente.sesso === 'F' ? 'Nata' : 'Nato'}</th>
             <td className={cella}>{paziente.luogo_nascita ? `a ${paziente.luogo_nascita} ` : ''}il {fmtGiornoIso(paziente.data_nascita)} ({etaEstesa(paziente.data_nascita, giorno)})</td>
             <th className={testa}>Codice fiscale</th><td className={`${cella} font-mono`}>{codiceFiscale ?? '—'}</td></tr>
@@ -162,6 +159,7 @@ export function RefertoGrafico({ impostazioni, studio, paziente, codiceFiscale, 
         <Voce titolo="Alimentazione" testo={anamnesi.alimentazione} />
         <Voce titolo="Sport" testo={anamnesi.sport} />
         <Voce titolo="Sonno" testo={anamnesi.sonno} />
+        <Voce titolo="Comunità" testo={anamnesi.comunita} />
       </div>
 
       {controllo ? (
@@ -173,7 +171,10 @@ export function RefertoGrafico({ impostazioni, studio, paziente, codiceFiscale, 
           <Testo testo={String(visita.decorso ?? '')} />
         </>
       ) : (
-        <><Titolo>Anamnesi patologica prossima</Titolo><Testo testo={String(visita.anamnesi ?? '')} /></>
+        <>
+          <Titolo>Anamnesi patologica prossima</Titolo><Testo testo={String(visita.anamnesi ?? '')} />
+          {visita.decorso ? <><Titolo>Controllo clinico del {dataIt(visita.data)}</Titolo><Testo testo={String(visita.decorso)} /></> : null}
+        </>
       )}
 
       {visita.esame_obiettivo ? <><Titolo>Esame obiettivo</Titolo><Testo testo={String(visita.esame_obiettivo)} /></> : null}
@@ -221,7 +222,6 @@ export function RefertoGrafico({ impostazioni, studio, paziente, codiceFiscale, 
 
       <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-6" style={{ breakInside: 'avoid' }}>
         <div className="space-y-1.5">
-          {visita.prossimo_controllo ? <p><b>Prossimo controllo:</b> <span className="capitalize">{dataLunga(visita.prossimo_controllo)}</span></p> : null}
           {chiusura.trim() && <p className="text-[9.5pt]">{chiusura}</p>}
         </div>
         <div className="w-64 text-center">

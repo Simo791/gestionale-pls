@@ -7,18 +7,19 @@ di minori (GDPR art. 9) fin dal primo commit.
 > ⚠️ Non usare con dati di pazienti reali senza DPIA, contratti con i fornitori (DPA),
 > piano Supabase a pagamento e verifica legale.
 
-## Cosa c'è in questa versione (Fase 0 · Fondamenta)
+## Cosa c'è in questa versione
 
 | Area | Contenuto |
 | --- | --- |
 | Database | 4 schemi separati: `anagrafica`, `clinica`, `pseudonimi`, `audit` |
 | Pseudonimizzazione | La parte clinica usa solo `pseudo_id`; la mappa la leggono solo funzioni controllate |
-| Permessi | Row Level Security su ogni tabella; dati clinici solo al pediatra titolare con MFA |
+| Permessi | Row Level Security su ogni tabella; dati clinici al pediatra titolare e al sostituto in servizio, con MFA; modulo Allergologia solo ad allergologi accettati e amministratori pediatri/allergologi |
 | Consensi | Uno per genitore e per finalità, storico non modificabile, stato completo/parziale/assente |
 | Audit | Registro in sola aggiunta con catena di hash SHA-256 e funzione di verifica |
 | Accesso | Login con codice via email (OTP) + secondo fattore TOTP per lo staff |
-| App | `apps/studio` (pediatra e segreteria) e `apps/genitori` (portale), React + Vite + Tailwind |
-| Test | 47 test pgTAP su RLS, audit, Auth Hook e funzioni del cruscotto; test Vitest sulla logica condivisa |
+| App | `apps/studio` (pediatra, segreteria, sostituto, allergologo) e `apps/genitori` (portale), React + Vite + Tailwind |
+| Moduli | Agenda, cartella, visite e prescrizioni, curve di crescita, vaccini, patologie, certificati, staff e sostituzioni, WhatsApp, Allergologia |
+| Test | Test pgTAP su RLS, audit, Auth Hook, staff, allergologia e correzioni di sicurezza (`supabase/tests/database`); test Vitest sulla logica condivisa |
 
 ## Struttura
 

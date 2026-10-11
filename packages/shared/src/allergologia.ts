@@ -250,8 +250,14 @@ export function livelloFeno(ppb: number, etaAnni: number): 'basso' | 'intermedio
 }
 
 // -----------------------------------------------------------------------------
-// Anafilassi — criteri clinici EAACI 2021 (Muraro A et al., Allergy 2022;77:357,
-// Box 1, ripresi da WAO 2020). Suggerimento per il medico, non una diagnosi.
+// Anafilassi — criteri clinici WAO 2020 (Cardona V et al., World Allergy Organ J
+// 2020;13:100472), adottati nelle linee guida EAACI 2021 (Muraro A et al., Allergy 2022):
+//  1) esordio acuto con cute/mucose + almeno uno tra compromissione respiratoria,
+//     ipotensione/disfunzione d'organo, sintomi gastrointestinali gravi;
+//  2) ipotensione, broncospasmo o coinvolgimento laringeo dopo esposizione ad allergene
+//     noto o molto probabile, anche senza sintomi cutanei.
+// Si mantiene anche il criterio NIAID/EAACI dei ≥ 2 apparati dopo probabile esposizione.
+// Suggerimento per il medico, non una diagnosi.
 // -----------------------------------------------------------------------------
 export interface SintomiReazione {
   cute_mucose: boolean;
@@ -261,15 +267,15 @@ export interface SintomiReazione {
 }
 
 export function criteriAnafilassi(s: SintomiReazione, esposizioneAllergeneNoto: boolean): { compatibile: boolean; criterio: string | null } {
-  if (s.cute_mucose && (s.respiratorio || s.cardiovascolare)) {
-    return { compatibile: true, criterio: 'Cute/mucose + compromissione respiratoria o cardiovascolare (criterio 1)' };
+  if (s.cute_mucose && (s.respiratorio || s.cardiovascolare || s.gastrointestinale)) {
+    return { compatibile: true, criterio: 'Cute/mucose + compromissione respiratoria, cardiovascolare o gastrointestinale grave (WAO, criterio 1)' };
+  }
+  if ((s.cardiovascolare || s.respiratorio) && esposizioneAllergeneNoto) {
+    return { compatibile: true, criterio: 'Ipotensione, broncospasmo o coinvolgimento laringeo dopo esposizione ad allergene noto, anche senza sintomi cutanei (WAO, criterio 2)' };
   }
   const organi = [s.cute_mucose, s.respiratorio, s.cardiovascolare, s.gastrointestinale].filter(Boolean).length;
-  if (organi >= 2) {
-    return { compatibile: true, criterio: 'Due o più apparati coinvolti dopo probabile esposizione (criterio 2)' };
-  }
-  if (s.cardiovascolare && esposizioneAllergeneNoto) {
-    return { compatibile: true, criterio: 'Ipotensione dopo esposizione ad allergene noto (criterio 3)' };
+  if (organi >= 2 && esposizioneAllergeneNoto) {
+    return { compatibile: true, criterio: 'Due o più apparati coinvolti dopo probabile esposizione (NIAID/EAACI)' };
   }
   return { compatibile: false, criterio: null };
 }

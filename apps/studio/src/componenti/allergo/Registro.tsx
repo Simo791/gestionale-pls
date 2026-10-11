@@ -23,7 +23,8 @@ export interface Campo {
 export type Valori = Record<string, string | boolean>;
 
 export const stileInput = 'w-full rounded-lg border border-slate-300 px-2 py-1.5';
-export const oggi = () => new Date().toISOString().slice(0, 10);
+/** Data di oggi nel fuso locale (AAAA-MM-GG): toISOString darebbe il giorno UTC. */
+export const oggi = () => new Date().toLocaleDateString('sv-SE');
 
 /** Valori del modulo → riga per il database ('' = null, numeri convertiti). */
 export function comeRiga(campi: Campo[], v: Valori): Record<string, unknown> {

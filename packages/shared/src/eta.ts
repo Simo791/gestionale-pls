@@ -21,12 +21,9 @@ export function etaInGiorni(dataNascita: ISODate, dataMisurazione: ISODate): num
 
 /** Età leggibile per l'interfaccia: "3 mesi", "2 anni e 4 mesi". */
 export function etaLeggibile(dataNascita: ISODate, oggi: ISODate): string {
-  const [an, mn, gn] = dataNascita.split('-').map(Number);
-  const [ao, mo, go] = oggi.split('-').map(Number);
-  if (!an || !mn || !gn || !ao || !mo || !go) throw new Error('Data non valida');
-  let mesi = (ao - an) * 12 + (mo - mn);
-  if (go < gn) mesi -= 1;
-  if (mesi < 0) throw new Error('Data di nascita futura');
+  // Stesso calcolo di etaEstesa (fine mese e anni bisestili): portale e studio mostrano la stessa età.
+  const { anni: a, mesi: m } = etaComponenti(dataNascita, oggi);
+  const mesi = a * 12 + m;
   if (mesi < 1) return `${etaInGiorni(dataNascita, oggi)} giorni`;
   if (mesi < 24) return mesi === 1 ? '1 mese' : `${mesi} mesi`;
   const anni = Math.floor(mesi / 12);

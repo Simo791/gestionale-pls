@@ -24,7 +24,7 @@ function ModificaRiga({ r, conEsenzione, onFatto }: { r: PatologiaPaziente; conE
   async function salva(e: FormEvent) {
     e.preventDefault();
     const { error } = await supabase.schema('clinica').from('patologie_paziente').update({
-      stato: m.stato, data_diagnosi: m.data || null, esenzione_attiva: m.esenzione,
+      stato: m.stato, data_diagnosi: m.data || null, esenzione_attiva: conEsenzione && m.esenzione,
       centro_riferimento: m.centro.trim() || null, note: m.note.trim() || null,
     }).eq('id', r.id);
     onFatto(error?.message);
@@ -89,7 +89,7 @@ export default function PatologieBambino({ pseudoId }: { pseudoId: string }) {
       patologia: form.patologia,
       stato: form.stato,
       data_diagnosi: form.data || null,
-      esenzione_attiva: form.esenzione,
+      esenzione_attiva: form.esenzione && !!scheda(form.patologia)?.esenzione,
       centro_riferimento: form.centro.trim() || null,
       note: form.note.trim() || null,
     });

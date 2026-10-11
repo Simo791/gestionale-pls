@@ -44,12 +44,15 @@ export function DocumentoStampa({
   studio,
   medico,
   bambino,
+  dataDocumento,
   children,
 }: {
   titolo: string;
   studio: Studio | null;
   medico: Pediatra | null;
   bambino?: DatiBambino;
+  /** Data del documento (es. emissione del certificato); se assente, oggi. */
+  dataDocumento?: string;
   children: ReactNode;
 }) {
   return (
@@ -106,7 +109,7 @@ export function DocumentoStampa({
 
       {/* Firma */}
       <footer className="mt-10 flex items-end justify-between" style={{ breakInside: 'avoid' }}>
-        <p>Data: {fmtGiornoIso(oggiIso())}</p>
+        <p>Data: {fmtGiornoIso((dataDocumento ?? oggiIso()).slice(0, 10))}</p>
         <div className="w-72 text-center">
           <div className="mb-1 h-12 border-b border-black" />
           <p className="font-semibold">{medico ? nomeMedico(medico) : 'Il medico'}</p>

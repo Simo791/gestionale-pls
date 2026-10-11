@@ -89,7 +89,7 @@ export default function AnamnesiGuidata({ scelte, onChange }: { scelte: Scelte; 
       </Riquadro>
 
       <Riquadro titolo="Fumo passivo" testo={t.fumo_dettaglio}>
-        <SiNo valore={f.esposto} no="NO" si="SI" onChange={(esposto) => aggiorna({ fumo: { ...f, esposto, chi: esposto === 'si' ? f.chi : [] } })} />
+        <SiNo valore={f.esposto} no="NO" si="SÌ" onChange={(esposto) => aggiorna({ fumo: { ...f, esposto, chi: esposto === 'si' ? f.chi : [] } })} />
         {f.esposto === 'si' && (
           <>
             <Chips opzioni={FUMATORI} scelte={f.chi} onChange={(chi) => aggiorna({ fumo: { ...f, chi } })} />

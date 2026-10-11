@@ -8,10 +8,10 @@ export function relazioneAttiva(r: RelazioneTutela, oggi: ISODate): boolean {
 }
 
 /** Ultima dichiarazione per ogni tutore su una finalità (i consensi sono uno storico). */
-export function consensiCorrenti(consensi: Consenso[], finalita: FinalitaConsenso): Map<UUID, Consenso> {
+export function consensiCorrenti(consensi: Consenso[], finalita: FinalitaConsenso, pazienteId?: UUID): Map<UUID, Consenso> {
   const ultimi = new Map<UUID, Consenso>();
   for (const c of consensi) {
-    if (c.finalita !== finalita) continue;
+    if (c.finalita !== finalita || (pazienteId && c.paziente_id !== pazienteId)) continue;
     const prec = ultimi.get(c.tutore_id);
     if (!prec || c.registrato_il > prec.registrato_il) ultimi.set(c.tutore_id, c);
   }
@@ -29,7 +29,7 @@ export function statoConsenso(
   oggi: ISODate,
 ): EsitoConsenso {
   const aventiDiritto = relazioni.filter((r) => relazioneAttiva(r, oggi)).map((r) => r.tutore_id);
-  const correnti = consensiCorrenti(consensi, finalita);
+  const correnti = consensiCorrenti(consensi, finalita, relazioni[0]?.paziente_id);
   const concessi = aventiDiritto.filter((id) => correnti.get(id)?.stato === 'concesso').length;
   if (concessi === 0) return 'assente';
   return concessi === aventiDiritto.length ? 'completo' : 'parziale';

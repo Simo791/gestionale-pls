@@ -178,6 +178,7 @@ export function RefertoVisita({ impostazioni, studio, paziente, codiceFiscale, v
         <Voce titolo="Alimentazione" testo={anamnesi.alimentazione} />
         <Voce titolo="Sport" testo={anamnesi.sport} />
         <Voce titolo="Sonno" testo={anamnesi.sonno} />
+        <Voce titolo="Comunità" testo={anamnesi.comunita} />
       </div>
 
       {controllo ? (
@@ -192,6 +193,7 @@ export function RefertoVisita({ impostazioni, studio, paziente, codiceFiscale, v
         <>
           <Titolo>Anamnesi patologica prossima</Titolo>
           <TestoReferto testo={String(visita.anamnesi ?? '')} />
+          {visita.decorso ? <><Titolo>Controllo clinico del {giorno(visita.data)}</Titolo><TestoReferto testo={String(visita.decorso)} /></> : null}
         </>
       )}
 

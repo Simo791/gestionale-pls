@@ -60,7 +60,7 @@ export function resocontoVisite(visite: RigaAllergo[], dati: DatiResoconto, o: O
   // visite precedenti, dalla più vecchia
   const elenco = [...visite].filter((v) => !primaDel || String(v.data) < primaDel).sort((a, b) => String(a.data).localeCompare(String(b.data)));
   if (!elenco.length) return '';
-  const limite = primaDel ? primaDel.slice(0, 10) : '9999';
+  const limite = primaDel ? new Date(primaDel).toLocaleDateString('sv-SE') : '9999';
   const prima = <T extends RigaAllergo>(r: T[], campo = 'data') => r.filter((x) => String(x[campo]).slice(0, 10) < limite);
   const out: string[] = [];
 

@@ -48,6 +48,7 @@ export interface BaseDocumento {
   studio: Studio | null;
   medico: Pediatra | null;
   bambino: DatiBambino;
+  dataDocumento?: string;
 }
 
 const Nota = ({ children }: { children: string }) => <p className="mt-2 text-[8.5pt] text-gray-700">{children}</p>;
@@ -306,7 +307,8 @@ export function docPrescrizione(base: BaseDocumento, p: Prescrizione) {
 
 /** Certificato per la dieta speciale nella ristorazione scolastica. */
 export function docDietaSpeciale(base: BaseDocumento, c: ContenutoDieta, validoFino: string | null) {
-  const nomi = c.allergeni.map((a) => `${a.nome}${a.dettaglio ? ` (${a.dettaglio})` : ''}`).join(', ');
+  // Solo la categoria di allergene (es. «Crostacei»), senza l'alimento specifico: dato minimo necessario alla mensa.
+  const nomi = [...new Set(c.allergeni.map((a) => a.nome))].join(', ');
   return (
     <DocumentoStampa titolo="Certificato per dieta speciale (ristorazione scolastica)" {...base}>
       <p className="mb-3">

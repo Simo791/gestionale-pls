@@ -284,8 +284,8 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
 
   function stampaCertificato(c: Certificato) {
     const contenuto = c.contenuto as unknown as ContenutoDieta;
-    if (c.tipo === 'dieta_speciale') void stampaClinico((b) => docDietaSpeciale(b, contenuto, c.valido_fino));
-    else if (c.tipo === 'dieta_esclusione') void stampaClinico((b) => docDietaEsclusione(b, contenuto));
+    if (c.tipo === 'dieta_speciale') void stampaClinico((b) => docDietaSpeciale({ ...b, dataDocumento: c.data }, contenuto, c.valido_fino));
+    else if (c.tipo === 'dieta_esclusione') void stampaClinico((b) => docDietaEsclusione({ ...b, dataDocumento: c.data }, contenuto));
   }
 
   const descrizioniDiagnosi = new Map((diagnosi.dati ?? []).map((d) => [d.codice, d.descrizione]));
