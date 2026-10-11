@@ -10,7 +10,7 @@ describe('leggiClaims', () => {
     const c = leggiClaims(
       token({ sub: 'u1', aal: 'aal2', app_ruolo: 'pediatra', app_studio_id: 's1', email: 'a@b.it' }),
     );
-    expect(c).toEqual({ sub: 'u1', email: 'a@b.it', aal: 'aal2', app_ruolo: 'pediatra', app_studio_id: 's1', app_admin: false, app_allergologia: false });
+    expect(c).toEqual({ sub: 'u1', email: 'a@b.it', aal: 'aal2', app_ruolo: 'pediatra', app_studio_id: 's1', app_admin: false, app_allergologia: false, app_cartelle: false });
   });
 
   it('tratta un ruolo sconosciuto come "nessuno"', () => {
@@ -33,9 +33,14 @@ describe('richiedeMfa', () => {
     expect(leggiClaims(token({ sub: 'u1', app_ruolo: 'segreteria', app_allergologia: true }))?.app_allergologia).toBe(false);
   });
 
-  it('app_admin vale per lo staff (beta: qualunque ruolo), mai per i genitori', () => {
+  it('app_admin vale per pediatra, sostituto e allergologo; mai per segreteria e genitori', () => {
     expect(leggiClaims(token({ sub: 'u1', app_ruolo: 'pediatra', app_admin: true }))?.app_admin).toBe(true);
-    expect(leggiClaims(token({ sub: 'u1', app_ruolo: 'segreteria', app_admin: true }))?.app_admin).toBe(true);
+    expect(leggiClaims(token({ sub: 'u1', app_ruolo: 'allergologo', app_admin: true }))?.app_admin).toBe(true);
+    expect(leggiClaims(token({ sub: 'u1', app_ruolo: 'segreteria', app_admin: true }))?.app_admin).toBe(false);
     expect(leggiClaims(token({ sub: 'u1', app_ruolo: 'tutore', app_admin: true }))?.app_admin).toBe(false);
+  });
+  it('app_cartelle solo per la segreteria', () => {
+    expect(leggiClaims(token({ sub: 'u1', app_ruolo: 'segreteria', app_cartelle: true }))?.app_cartelle).toBe(true);
+    expect(leggiClaims(token({ sub: 'u1', app_ruolo: 'tutore', app_cartelle: true }))?.app_cartelle).toBe(false);
   });
 });

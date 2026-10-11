@@ -35,7 +35,9 @@ export default function ControlliScreening({
   pseudoId,
   dataNascita,
   fattoriRischio,
+  solaLettura = false,
 }: {
+  solaLettura?: boolean;
   pseudoId: string;
   dataNascita: string;
   fattoriRischio: string[];
@@ -99,7 +101,7 @@ export default function ControlliScreening({
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge tono={stato.tono}>{stato.testo}</Badge>
-                  {!eseguito && (
+                  {!eseguito && !solaLettura && (
                     <Bottone onClick={() => { setAperto(aperto === c.codice ? null : c.codice); setEsito('nella_norma'); setData(oggi); }}>
                       Registra esito
                     </Bottone>

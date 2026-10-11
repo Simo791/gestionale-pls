@@ -1,12 +1,13 @@
 import type { ClaimsApp, Pediatra, Studio } from '@pls/shared';
 import { useEffect, useState, type FormEvent } from 'react';
-import GestioneAllergologia from '../componenti/allergo/GestioneAllergologia';
 import GestioneModelli from '../componenti/GestioneModelli';
 import GestioneStaff from '../componenti/GestioneStaff';
 import ImportaCatalogo from '../componenti/ImportaCatalogo';
+import PermessiSegreteria from '../componenti/PermessiSegreteria';
 import { Bottone, Caricamento, Errore, Pannello } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
 import { etichettaRuolo } from '../lib/formato';
+import { link } from '../lib/rotta';
 import { supabase } from '../lib/supabase';
 
 type CampoMedico = 'titolo' | 'nome' | 'cognome' | 'specializzazione' | 'codice_regionale' | 'ordine_provincia'
@@ -177,16 +178,26 @@ export default function Account({ claims }: { claims: ClaimsApp }) {
 
       {(claims.app_ruolo === 'pediatra' || claims.app_ruolo === 'sostituto') && <GestioneModelli claims={claims} />}
 
-      <GestioneStaff claims={claims} />
+      <GestioneStaff claims={claims} parte="sostituzioni" />
 
-      {claims.app_admin && <GestioneAllergologia claims={claims} />}
+      {claims.app_ruolo === 'pediatra' && (
+        <Pannello titolo="Accesso della segreteria alle mie cartelle" sottotitolo="Consenti alla segreteria di consultare, senza modificarle, le cartelle dei tuoi assistiti">
+          <PermessiSegreteria claims={claims} soloMie />
+        </Pannello>
+      )}
 
-      {modificabile && (
+      {modificabile && !claims.app_admin && (
         <div id="catalogo-prestazioni">
           <Pannello titolo="Catalogo prestazioni (Regione Calabria)" sottotitolo="Codici per le prescrizioni, importati dal file ufficiale">
             <ImportaCatalogo />
           </Pannello>
         </div>
+      )}
+
+      {claims.app_admin && (
+        <Pannello titolo="Amministrazione" sottotitolo="Staff, permessi, moduli specialistici, genitori, integrazioni e catalogo">
+          <a href={link('amministrazione')} className="text-sm font-medium text-teal-700 underline">Apri la sezione Amministrazione</a>
+        </Pannello>
       )}
     </div>
   );

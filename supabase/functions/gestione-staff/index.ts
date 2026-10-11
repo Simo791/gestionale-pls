@@ -3,7 +3,7 @@
 // quindi l'operazione non può stare nel frontend.
 //
 // Sicurezza: la richiesta deve arrivare con il JWT dell'utente (verify_jwt attivo);
-// la funzione rilegge il token e accetta solo chi ha app_admin = true (qualunque ruolo dello staff, fase beta).
+// la funzione rilegge il token e accetta solo chi ha app_admin = true (pediatra, sostituto o allergologo: la segreteria non può essere amministratore).
 // Il nuovo utente accede poi con il codice via email e configura il secondo fattore.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
   const { data: chi, error: errUtente } = await admin.auth.getUser(jwt);
   const claims = leggiClaims(jwt);
   if (errUtente || !chi.user || !claims) return risposta({ errore: 'Non autenticato' }, 401);
-  if (claims.app_admin !== true || !claims.app_studio_id || !['pediatra', 'segreteria', 'sostituto', 'allergologo'].includes(String(claims.app_ruolo))) {
+  if (claims.app_admin !== true || !claims.app_studio_id || !['pediatra', 'sostituto', 'allergologo'].includes(String(claims.app_ruolo))) {
     return risposta({ errore: 'Solo l\'amministratore dello studio può aggiungere membri' }, 403);
   }
   if (claims.aal !== 'aal2') return risposta({ errore: 'Serve il secondo fattore di autenticazione' }, 403);

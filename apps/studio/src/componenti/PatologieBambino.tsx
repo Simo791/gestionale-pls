@@ -53,7 +53,7 @@ function ModificaRiga({ r, conEsenzione, onFatto }: { r: PatologiaPaziente; conE
 }
 
 /** Patologie del bambino collegate al catalogo, con stato, esenzione e centro di riferimento. */
-export default function PatologieBambino({ pseudoId }: { pseudoId: string }) {
+export default function PatologieBambino({ pseudoId, solaLettura = false }: { pseudoId: string; solaLettura?: boolean }) {
   const [aperto, setAperto] = useState(false);
   const [form, setForm] = useState({
     patologia: '', stato: 'sospetta' as PatologiaPaziente['stato'], data: '', esenzione: false, centro: '', note: '',
@@ -126,7 +126,7 @@ export default function PatologieBambino({ pseudoId }: { pseudoId: string }) {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tono={STATI_PATOLOGIA[r.stato].tono}>{STATI_PATOLOGIA[r.stato].testo}</Badge>
-                  <button className="text-xs text-teal-700 underline" onClick={() => setInModifica(inModifica === r.id ? null : r.id)}>Modifica</button>
+                  {!solaLettura && <button className="text-xs text-teal-700 underline" onClick={() => setInModifica(inModifica === r.id ? null : r.id)}>Modifica</button>}
                   <button className="text-xs text-teal-700 underline" onClick={() => setConStorico(conStorico === r.id ? null : r.id)}>
                     {conStorico === r.id ? 'Nascondi storico' : 'Storico modifiche'}
                   </button>
@@ -146,9 +146,9 @@ export default function PatologieBambino({ pseudoId }: { pseudoId: string }) {
         </ul>
       )}
 
-      <Bottone variante="primario" onClick={() => setAperto((v) => !v)}>+ Aggiungi patologia</Bottone>
+      {!solaLettura && <Bottone variante="primario" onClick={() => setAperto((v) => !v)}>+ Aggiungi patologia</Bottone>}
 
-      {aperto && (
+      {aperto && !solaLettura && (
         <form onSubmit={(e) => void salva(e)} className="grid gap-3 rounded-lg border border-slate-200 p-3 md:grid-cols-2">
           <label className="text-sm md:col-span-2">
             <span className="block text-slate-500">Patologia (dal catalogo)</span>

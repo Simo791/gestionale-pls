@@ -49,7 +49,7 @@ select pg_temp.come('a0000000-0000-4000-8000-000000000002', 'segreteria',
                     'c0000000-0000-4000-8000-000000000001', 'aal2');
 set local role authenticated;
 select throws_ok($$ select * from api.verifica_audit() $$, 'P0001',
-  'Solo il pediatra può verificare il registro di audit',
+  'Solo il pediatra o l''amministratore può verificare il registro di audit',
   'la segreteria non può verificare il registro');
 reset role;
 

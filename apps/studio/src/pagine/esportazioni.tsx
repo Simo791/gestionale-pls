@@ -1,3 +1,4 @@
+import { etichettePresenti } from '../componenti/Accompagnatori';
 import {
   etaDaGiorni,
   etaInGiorni,
@@ -243,13 +244,13 @@ export function docPatologie(base: BaseDocumento, righe: PatologiaPaziente[], ca
 }
 
 /** Referto della visita, con le indicazioni per i genitori. */
-export function docVisita(base: BaseDocumento, v: Visita, m: Misurazione | null, sesso: Paziente['sesso']) {
+export function docVisita(base: BaseDocumento, v: Visita, m: Misurazione | null, sesso: Paziente['sesso'], nomiPresenti: Map<string, string> = new Map()) {
   const perc = (ind: 'peso' | 'altezza' | 'circonferenza_cranica', x: number | null) =>
     m && x !== null ? `${x} (percentile ${fmtPercentile(percentileMisura(ind, sesso, m.eta_giorni, x))})` : null;
   const righe: [string, string | null][] = [
     ['Data', fmtDataOra(v.data)],
     ['Tipo', ETICHETTA_TIPO_VISITA[v.tipo] ?? v.tipo],
-    ['Presenti', v.accompagnatori?.join(', ') || null],
+    ['Presenti', etichettePresenti(v.accompagnatori, nomiPresenti) || null],
     ['Motivo', v.motivo],
     ['Anamnesi', v.anamnesi],
     ['Peso (kg)', m ? perc('peso', m.peso_kg) : null],

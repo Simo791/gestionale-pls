@@ -1,11 +1,11 @@
 -- =============================================================================
--- Beta: nomina di amministratori con qualunque ruolo.
+-- Nomina degli amministratori: qualunque ruolo clinico, mai la segreteria.
 -- =============================================================================
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path to public, extensions;
 
-select plan(8);
+select plan(9);
 
 create function pg_temp.come(p_sub uuid, p_ruolo text, p_admin boolean)
 returns void language sql as $$
@@ -23,21 +23,27 @@ reset role;
 
 select pg_temp.come('a0000000-0000-4000-8000-000000000001', 'pediatra', true);
 set local role authenticated;
-select lives_ok($$ select api.imposta_amministratore('a0000000-0000-4000-8000-000000000002', true) $$, 'il titolare nomina amministratore la segreteria');
+select throws_ok($$ select api.imposta_amministratore('a0000000-0000-4000-8000-000000000002', true) $$, 'P0001', null,
+  'la segreteria non può essere nominata amministratore');
+select lives_ok($$ select api.imposta_amministratore('a0000000-0000-4000-8000-000000000004', true) $$, 'il titolare nomina amministratore il sostituto');
 select throws_ok($$ select api.imposta_amministratore('a0000000-0000-4000-8000-000000000001', false) $$, 'P0001',
   'Non puoi revocare a te stesso il ruolo di amministratore', 'non ci si revoca da soli');
 reset role;
-select is((public.custom_access_token_hook(jsonb_build_object('user_id', 'a0000000-0000-4000-8000-000000000002', 'claims', '{}'::jsonb))
-          -> 'claims' ->> 'app_admin'), 'true', 'il token della segreteria ora porta app_admin');
+select is((public.custom_access_token_hook(jsonb_build_object('user_id', 'a0000000-0000-4000-8000-000000000004', 'claims', '{}'::jsonb))
+          -> 'claims' ->> 'app_admin'), 'true', 'il token del sostituto ora porta app_admin');
 
+-- token falsificato: la segreteria si dichiara amministratore, il database no
 select pg_temp.come('a0000000-0000-4000-8000-000000000002', 'segreteria', true);
 set local role authenticated;
-select ok(sicurezza.is_admin(), 'la segreteria amministratore è riconosciuta');
-select ok(not sicurezza.puo_accedere_paziente('d0000000-0000-4000-8000-000000000001'), 'ma non apre le cartelle degli assistiti');
+select ok(not sicurezza.admin_attivo(), 'per il database la segreteria non è amministratore');
+select ok(not sicurezza.puo_accedere_paziente('d0000000-0000-4000-8000-000000000001'), 'e non apre le cartelle degli assistiti');
+reset role;
+select pg_temp.come('a0000000-0000-4000-8000-000000000001', 'pediatra', true);
+set local role authenticated;
 select lives_ok($$ select api.tutti_amministratori() $$, 'beta: tutti amministratori');
 reset role;
-select is((select count(*)::int from anagrafica.membri_studio where studio_id = 'c0000000-0000-4000-8000-000000000001' and attivo and not amministratore), 0,
-  'nessun membro attivo resta senza il ruolo di amministratore');
+select is((select count(*)::int from anagrafica.membri_studio where studio_id = 'c0000000-0000-4000-8000-000000000001' and attivo and not amministratore), 1,
+  'tutti amministratori tranne la segreteria');
 
 select * from finish();
 rollback;

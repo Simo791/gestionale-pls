@@ -32,7 +32,9 @@ export const FONTI_ALLERGIE =
   'Inalanti: Fondazione Salus Pueri. Test diagnostici: Ospedale Pediatrico Bambino Gesù.';
 
 /** Allergie strutturate del bambino + catalogo dei test allergologici disponibili. */
-export default function Allergie({ pseudoId, legacy, onDocumento }: {
+export default function Allergie({ pseudoId, legacy, onDocumento, solaLettura = false }: {
+  /** Consultazione senza modifiche (segreteria autorizzata). */
+  solaLettura?: boolean;
   pseudoId: string;
   legacy: string[];
   /** Apre il certificato per la mensa o la dieta di esclusione con gli allergeni alimentari indicati. */
@@ -116,13 +118,14 @@ export default function Allergie({ pseudoId, legacy, onDocumento }: {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tono={GRAVITA[a.gravita].tono}>{GRAVITA[a.gravita].testo}</Badge>
-                {onDocumento && alimentari.some((x) => x.codice === a.allergene) && (
+                {!solaLettura && onDocumento && alimentari.some((x) => x.codice === a.allergene) && (
                   <button onClick={() => apri('dieta_speciale', [a.allergene])} className="text-xs text-teal-700 underline">Certificato mensa</button>
                 )}
+                {solaLettura ? <span className="text-xs text-slate-600">{STATI[a.stato]}</span> : (
                 <select value={a.stato} onChange={(e) => void aggiornaStato(a, e.target.value as AllergiaPaziente['stato'])}
                         aria-label="Stato dell'allergia" className="rounded-lg border border-slate-300 px-2 py-1 text-xs">
                   {(Object.keys(STATI) as AllergiaPaziente['stato'][]).map((s) => <option key={s} value={s}>{STATI[s]}</option>)}
-                </select>
+                </select>)}
               </div>
             </li>
           ))}
@@ -133,9 +136,9 @@ export default function Allergie({ pseudoId, legacy, onDocumento }: {
       )}
 
       <div className="flex flex-wrap gap-2">
-        <Bottone variante="primario" onClick={() => setNuova((v) => !v)}>+ Aggiungi allergia</Bottone>
+        {!solaLettura && <Bottone variante="primario" onClick={() => setNuova((v) => !v)}>+ Aggiungi allergia</Bottone>}
         <Bottone onClick={() => setMostraTest((v) => !v)}>{mostraTest ? 'Nascondi' : 'Mostra'} test allergologici</Bottone>
-        {onDocumento && alimentari.length > 0 && (
+        {!solaLettura && onDocumento && alimentari.length > 0 && (
           <>
             <Bottone onClick={() => apri('dieta_speciale', alimentari.map((x) => x.codice))}>Certificato scuola / mensa</Bottone>
             <Bottone onClick={() => apri('dieta_esclusione', alimentari.map((x) => x.codice))}>Dieta di esclusione</Bottone>
@@ -143,7 +146,7 @@ export default function Allergie({ pseudoId, legacy, onDocumento }: {
         )}
       </div>
 
-      {nuova && (
+      {nuova && !solaLettura && (
         <form onSubmit={(e) => void salva(e)} className="grid gap-3 rounded-lg border border-slate-200 p-3 md:grid-cols-2">
           <label className="text-sm">
             <span className="block text-slate-500">Allergene</span>

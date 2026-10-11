@@ -14,7 +14,7 @@ const nomeMembro = (m: MembroStudio | undefined) =>
  * Il passaggio titolare → sostituto è a date: durante il periodo il sostituto vede le
  * cartelle dei suoi assistiti e riceve le notifiche; a fine periodo tutto torna al titolare.
  */
-export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
+export default function GestioneStaff({ claims, parte = 'tutto' }: { claims: ClaimsApp; parte?: 'staff' | 'sostituzioni' | 'tutto' }) {
   const membri = useDati(() => q<MembroStudio[]>(supabase.schema('anagrafica').from('membri_studio').select('*').order('ruolo')), []);
   const sostituzioni = useDati(
     () => q<Sostituzione[]>(supabase.schema('anagrafica').from('sostituzioni').select('*').eq('titolare_id', claims.sub)
@@ -49,9 +49,11 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
 
   async function tuttiAmministratori() {
     setEsito(null);
+    if (!window.confirm('Tutti i pediatri, sostituti e allergologi attivi diventeranno amministratori, con accesso a tutte le cartelle cliniche. Continuare?')) return;
     const { data, error } = await supabase.schema('api').rpc('tutti_amministratori');
     if (error) return setEsito({ ok: false, testo: error.message });
-    setEsito({ ok: true, testo: `${data as number} membri nominati amministratori. Vale dal loro prossimo accesso.` });
+    const n = data as number;
+    setEsito({ ok: true, testo: `${n === 1 ? '1 membro nominato amministratore' : `${n} membri nominati amministratori`}. Vale dal loro prossimo accesso.` });
     membri.ricarica();
   }
 
@@ -77,6 +79,7 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
 
   async function revoca(s: Sostituzione) {
     setEsito(null);
+    if (!window.confirm('Revocare la sostituzione? L\'accesso del sostituto ai tuoi assistiti si chiude subito.')) return;
     const { error } = await supabase.schema('api').rpc('revoca_sostituzione', { p_id: s.id });
     if (error) return setEsito({ ok: false, testo: error.message });
     setEsito({ ok: true, testo: 'Sostituzione revocata: l\'accesso del sostituto è chiuso.' });
@@ -89,8 +92,8 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
     <>
       {esito && <p role="status" className={`rounded-lg p-3 text-sm ${esito.ok ? 'bg-emerald-50 text-emerald-900' : 'bg-red-50 text-red-900'}`}>{esito.testo}</p>}
 
-      {claims.app_admin && (
-        <Pannello titolo="Staff dello studio" sottotitolo="Sei amministratore: aggiungi, disattivi e nomini amministratori i membri dello studio">
+      {claims.app_admin && parte !== 'sostituzioni' && (
+        <Pannello titolo="Staff dello studio" sottotitolo="Aggiungi, disattiva e nomina gli amministratori">
           {membri.errore ? <Errore messaggio={membri.errore} /> : (
             <ul className="divide-y divide-slate-100">
               {(membri.dati ?? []).map((m) => (
@@ -103,12 +106,12 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
                     <Badge tono={m.ruolo === 'pediatra' ? 'info' : 'neutro'}>{etichettaRuolo(m.ruolo)}</Badge>
                     {m.amministratore && <Badge tono="ok">Amministratore</Badge>}
                     {!m.attivo && <Badge tono="attenzione">Disattivato</Badge>}
-                    {m.attivo && m.utente_id !== claims.sub && !(m.amministratore && m.ruolo === 'pediatra' && claims.app_ruolo !== 'pediatra') && (
+                    {m.attivo && m.ruolo !== 'segreteria' && m.utente_id !== claims.sub && !(m.amministratore && m.ruolo === 'pediatra' && claims.app_ruolo !== 'pediatra') && (
                       <Bottone onClick={() => void amministratore(m, !m.amministratore)}>
                         {m.amministratore ? 'Togli amministratore' : 'Rendi amministratore'}
                       </Bottone>
                     )}
-                    {!m.amministratore && m.utente_id !== claims.sub && (
+                    {!m.amministratore && m.utente_id !== claims.sub && !(m.ruolo === 'pediatra' && claims.app_ruolo !== 'pediatra') && (
                       <Bottone variante={m.attivo ? 'pericolo' : 'secondario'} onClick={() => void attiva(m, !m.attivo)}>
                         {m.attivo ? 'Disattiva' : 'Riattiva'}
                       </Bottone>
@@ -118,12 +121,11 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
               ))}
             </ul>
           )}
-          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-            <span className="flex-1">Fase beta: puoi nominare amministratore qualunque membro. L'amministratore gestisce staff e moduli, ma
-              non apre le cartelle degli assistiti (restano al pediatra titolare e al sostituto in servizio); all'Allergologia accedono
-              solo pediatri e allergologi. Per disattivare un amministratore togli prima il ruolo; solo un pediatra amministratore può
-              toglierlo a un pediatra.</span>
-            <Bottone onClick={() => void tuttiAmministratori()}>Rendi tutti amministratori</Bottone>
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+            <span className="flex-1">L'<b>amministratore</b> può fare tutto, cartelle cliniche e Allergologia comprese: nominalo con attenzione.
+              La segreteria non può essere amministratore. Per disattivare un amministratore togli prima il ruolo; solo un pediatra
+              amministratore può toglierlo a un pediatra.</span>
+            <Bottone onClick={() => void tuttiAmministratori()}>Fase di prova: tutti amministratori (tranne la segreteria)</Bottone>
           </div>
           <form onSubmit={(e) => void aggiungi(e)} className="mt-4 grid gap-3 rounded-lg border border-slate-200 p-3 md:grid-cols-2">
             <p className="text-sm font-medium text-slate-800 md:col-span-2">Aggiungi un membro</p>
@@ -135,16 +137,16 @@ export default function GestioneStaff({ claims }: { claims: ClaimsApp }) {
               <input required type="email" value={nuovo.email} onChange={(e) => setNuovo({ ...nuovo, email: e.target.value })} className={stileInput} /></label>
             <label className="text-sm"><span className="block text-slate-500">Ruolo</span>
               <select value={nuovo.ruolo} onChange={(e) => setNuovo({ ...nuovo, ruolo: e.target.value as 'segreteria' | 'sostituto' | 'allergologo' })} className={stileInput}>
-                <option value="segreteria">Segreteria (agenda, anagrafiche, consensi: niente dati clinici)</option>
-                <option value="sostituto">Sostituto (dati clinici solo nei periodi di sostituzione)</option>
-                <option value="allergologo">Allergologo pediatra (solo modulo Allergologia, già accettato)</option>
+                <option value="segreteria">Segreteria (agenda, anagrafiche, consensi; cartelle solo se il pediatra lo consente)</option>
+                <option value="sostituto">Pediatra sostituto (dati clinici solo nei periodi di sostituzione)</option>
+                <option value="allergologo">Pediatra allergologo (solo modulo Allergologia)</option>
               </select></label>
             <div className="md:col-span-2"><Bottone type="submit" variante="primario" disabled={invio}>{invio ? 'Aggiunta…' : 'Aggiungi'}</Bottone></div>
           </form>
         </Pannello>
       )}
 
-      {claims.app_ruolo === 'pediatra' && (
+      {claims.app_ruolo === 'pediatra' && parte !== 'staff' && (
         <Pannello titolo="Sostituzioni" sottotitolo="Passaggio dei tuoi assistiti a un sostituto per un periodo">
           {(sostituzioni.dati ?? []).length === 0 ? <Vuoto testo="Nessuna sostituzione in corso o programmata." /> : (
             <ul className="divide-y divide-slate-100">

@@ -9,7 +9,9 @@ interface Voce {
   sezione: Sezione;
   etichetta: string;
   icona: string; // percorso SVG (24x24, stroke)
+  /** Pediatra titolare o amministratore. */
   soloPediatra?: boolean;
+  soloAdmin?: boolean;
   /** Per chi è abilitato al modulo Allergologia e sempre per l'amministratore (che lo attiva da lì). */
   allergologia?: boolean;
 }
@@ -22,6 +24,7 @@ const VOCI: Voce[] = [
   { sezione: 'consensi', etichetta: 'Consensi', icona: 'M9 12l2 2 4-4M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z' },
   { sezione: 'registro', etichetta: 'Registro accessi', icona: 'M9 5h10M9 12h10M9 19h10M5 5h.01M5 12h.01M5 19h.01', soloPediatra: true },
   { sezione: 'patologie', etichetta: 'Patologie', icona: 'M4 5a2 2 0 012-2h12v16H6a2 2 0 00-2 2V5zM4 19a2 2 0 012-2h12M9 7h6M12 4v6' },
+  { sezione: 'amministrazione', etichetta: 'Amministrazione', icona: 'M4 6h16M4 12h16M4 18h16M8 4v4M16 10v4M10 16v4', soloAdmin: true },
   { sezione: 'account', etichetta: 'Account', icona: 'M12 12a4 4 0 100-8 4 4 0 000 8M4 21v-1a6 6 0 016-6h4a6 6 0 016 6v1' },
 ];
 
@@ -45,10 +48,13 @@ export default function Layout({
   children: ReactNode;
 }) {
   const [menuAperto, setMenuAperto] = useState(false);
-  // L'allergologo usa solo il suo modulo; gli altri vedono Allergologia solo se abilitati.
-  const voci = claims.app_ruolo === 'allergologo'
+  // L'allergologo (non amministratore) usa solo il suo modulo; l'amministratore vede tutto;
+  // gli altri vedono Allergologia solo se abilitati.
+  const voci = claims.app_ruolo === 'allergologo' && !claims.app_admin
     ? VOCI.filter((v) => v.sezione === 'allergologia' || v.sezione === 'account')
-    : VOCI.filter((v) => (!v.soloPediatra || claims.app_ruolo === 'pediatra') && (!v.allergologia || claims.app_allergologia || (claims.app_admin && (claims.app_ruolo === 'pediatra' || claims.app_ruolo === 'allergologo'))));
+    : VOCI.filter((v) => (!v.soloPediatra || claims.app_ruolo === 'pediatra' || claims.app_admin)
+        && (!v.soloAdmin || claims.app_admin)
+        && (!v.allergologia || claims.app_allergologia || claims.app_admin));
 
   const menu = (
     <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Menu principale">
@@ -76,7 +82,7 @@ export default function Layout({
     <div className="border-t border-slate-100 p-4 text-sm">
       <p className="truncate font-medium text-slate-800" title={claims.email}>{claims.email}</p>
       <p className="mb-3 text-xs text-slate-500">
-        {etichettaRuolo(claims.app_ruolo)} · accesso con verifica in due passaggi
+        {etichettaRuolo(claims.app_ruolo)}{claims.app_admin ? ' · amministratore' : ''} · verifica in due passaggi
       </p>
       <button onClick={() => void esci()} className="text-sm text-slate-600 underline hover:text-slate-900">
         Esci

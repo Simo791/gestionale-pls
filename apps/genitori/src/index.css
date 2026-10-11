@@ -1,1 +1,8 @@
 @import "tailwindcss";
+
+/* Stampa di un documento dal portale: si stampa solo l'area del documento (montata in <body>). */
+.area-stampa { display: none; }
+@media print {
+  body > *:not(.area-stampa) { display: none !important; }
+  .area-stampa { display: block; position: static; }
+}

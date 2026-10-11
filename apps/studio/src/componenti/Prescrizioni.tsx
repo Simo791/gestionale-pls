@@ -91,9 +91,11 @@ export default function Prescrizioni({
       {catalogo.dati === 0 && (
         <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
           Il catalogo regionale delle prestazioni non è ancora stato importato.{' '}
-          {claims.app_ruolo === 'pediatra'
+          {claims.app_admin
+            ? <>Importalo da <a className="underline" href={link('amministrazione', 'catalogo')}>Amministrazione › Catalogo prestazioni</a> con il file ufficiale della Regione Calabria.</>
+            : claims.app_ruolo === 'pediatra'
             ? <>Importalo da <a className="underline" href={link('account')}>Account › Catalogo prestazioni</a> con il file ufficiale della Regione Calabria.</>
-            : 'Il pediatra può importarlo dalla pagina Account.'}
+            : 'Il pediatra o l’amministratore può importarlo.'}
         </p>
       )}
 

@@ -1,130 +1,106 @@
 import { etaLeggibile, type FiglioPortale } from '@pls/shared';
 import { useEffect, useState } from 'react';
+import { dataOra, oggiISO } from '../lib/formato';
 import { esci } from '../lib/sessione';
 import { supabase } from '../lib/supabase';
+import Consensi from './Consensi';
+import Figlio from './Figlio';
 
 interface ProssimoAppuntamento { id: string; inizio: string; fine: string; tipo: string; stato: 'richiesto' | 'confermato' }
-
-interface DatiFiglio {
-  figlio: FiglioPortale;
-  peso: number | null;
-  altezza: number | null;
-  /** Prossimo appuntamento confermato e, se c'è, richiesta in attesa di conferma. */
-  prossimo: ProssimoAppuntamento | null;
-  inAttesa: ProssimoAppuntamento | null;
-}
-
-interface Accesso {
-  avvenuto_il: string;
-  ruolo: string;
-  azione: string;
-}
-
-/** Data di oggi nel fuso locale (toISOString darebbe il giorno UTC). */
-const oggiISO = () => new Date().toLocaleDateString('sv-SE');
+interface DatiFiglio { figlio: FiglioPortale; prossimo: ProssimoAppuntamento | null; inAttesa: ProssimoAppuntamento | null }
 
 /**
- * Portale genitori, Fase 0: elenco dei figli visibili (relazione valida + consenso
- * al portale), ultima misurazione, prossimo appuntamento e registro accessi.
+ * Portale genitori: i figli (visibili con relazione valida e consenso al portale),
+ * la scheda di ciascuno e i consensi da leggere e firmare.
  */
 export default function Figli() {
+  const [vista, setVista] = useState<'figli' | 'consensi'>('figli');
   const [dati, setDati] = useState<DatiFiglio[] | null>(null);
-  const [registro, setRegistro] = useState<{ nome: string; righe: Accesso[] } | null>(null);
+  const [aperto, setAperto] = useState<FiglioPortale | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
+  const [daFirmare, setDaFirmare] = useState(0);
+  const [versione, setVersione] = useState(0);
 
   useEffect(() => {
     void (async () => {
       try {
-        const { data, error } = await supabase.schema('api').rpc('miei_figli');
-        if (error) throw new Error(error.message);
-        const figli = (data ?? []) as FiglioPortale[];
-        const ultimo = async (colonna: 'peso_kg' | 'altezza_cm', pseudo: string) => {
-          const r = await supabase.schema('clinica').from('misurazioni').select(colonna)
-            .eq('pseudo_id', pseudo).not(colonna, 'is', null).order('eta_giorni', { ascending: false }).limit(1);
-          if (r.error) throw new Error(r.error.message);
-          return ((r.data ?? [])[0] as Record<string, number> | undefined)?.[colonna] ?? null;
-        };
-        const risultati = await Promise.all(
-          figli.map(async (figlio): Promise<DatiFiglio> => {
-            // Gli appuntamenti arrivano da una RPC che restituisce solo data, tipo e stato
-            // (le note interne dello studio non escono mai verso il portale).
-            const [peso, altezza, app] = await Promise.all([
-              ultimo('peso_kg', figlio.pseudo_id), ultimo('altezza_cm', figlio.pseudo_id),
-              supabase.schema('api').rpc('appuntamenti_figlio', { p_paziente_id: figlio.paziente_id }),
-            ]);
-            if (app.error) throw new Error(app.error.message);
-            const elenco = (app.data ?? []) as ProssimoAppuntamento[];
-            return {
-              figlio, peso, altezza,
-              prossimo: elenco.find((a) => a.stato === 'confermato') ?? null,
-              inAttesa: elenco.find((a) => a.stato === 'richiesto') ?? null,
-            };
-          }),
-        );
+        const [figliR, consensiR] = await Promise.all([
+          supabase.schema('api').rpc('miei_figli'),
+          supabase.schema('api').rpc('portale_consensi'),
+        ]);
+        if (figliR.error) throw new Error(figliR.error.message);
+        if (consensiR.error) setErrore(`consensi non disponibili (${consensiR.error.message})`);
+        else setDaFirmare(((consensiR.data ?? []) as { stato: string | null }[]).filter((c) => !c.stato || c.stato === 'da_rinnovare').length);
+        const figli = (figliR.data ?? []) as FiglioPortale[];
+        const risultati = await Promise.all(figli.map(async (figlio): Promise<DatiFiglio> => {
+          // Solo data, tipo e stato: le note interne dello studio non escono verso il portale.
+          // Un errore su un figlio non nasconde gli altri.
+          const app = await supabase.schema('api').rpc('appuntamenti_figlio', { p_paziente_id: figlio.paziente_id });
+          if (app.error) return { figlio, prossimo: null, inAttesa: null };
+          const elenco = (app.data ?? []) as ProssimoAppuntamento[];
+          return { figlio, prossimo: elenco.find((a) => a.stato === 'confermato') ?? null, inAttesa: elenco.find((a) => a.stato === 'richiesto') ?? null };
+        }));
         setDati(risultati);
       } catch (e) {
         setErrore(e instanceof Error ? e.message : String(e));
         setDati([]);
       }
     })();
-  }, []);
-
-  async function mostraRegistro(figlio: FiglioPortale) {
-    const { data, error } = await supabase.schema('api').rpc('registro_accessi', { p_paziente_id: figlio.paziente_id });
-    if (error) return setErrore(`Registro accessi non disponibile: ${error.message}`);
-    setRegistro({ nome: figlio.nome, righe: (data ?? []) as Accesso[] });
-  }
+  }, [versione]);
 
   return (
-    <div className="mx-auto max-w-md px-4 py-6">
-      <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">I miei figli</h1>
+    <div className="mx-auto max-w-2xl px-4 py-6">
+      <header className="mb-4 flex items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-sky-700">Portale genitori</p>
+          <h1 className="text-xl font-semibold">{vista === 'consensi' ? 'Consensi' : aperto ? aperto.nome : 'I miei figli'}</h1>
+        </div>
         <button onClick={() => void esci()} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">Esci</button>
       </header>
-
-      {dati === null && <p className="text-slate-500">Caricamento…</p>}
-      {errore && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-900">Si è verificato un errore: {errore}. Riprova più tardi.</p>}
-      {dati?.length === 0 && !errore && (
-        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-          Nessun figlio visibile. Lo studio deve registrare il collegamento e il tuo consenso all'uso del portale.
-        </p>
-      )}
-
-      <ul className="space-y-4">
-        {dati?.map(({ figlio, peso, altezza, prossimo, inAttesa }) => (
-          <li key={figlio.paziente_id} className="rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-lg font-medium">{figlio.nome}</p>
-            <p className="mb-3 text-sm text-slate-500">{etaLeggibile(figlio.data_nascita, oggiISO())}</p>
-            <dl className="grid grid-cols-2 gap-2 text-sm">
-              <dt className="text-slate-500">Ultimo peso</dt>
-              <dd>{peso != null ? `${String(peso).replace('.', ',')} kg` : '—'}</dd>
-              <dt className="text-slate-500">Ultima altezza</dt>
-              <dd>{altezza != null ? `${String(altezza).replace('.', ',')} cm` : '—'}</dd>
-              <dt className="text-slate-500">Prossimo appuntamento</dt>
-              <dd>{prossimo ? new Date(prossimo.inizio).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</dd>
-              {inAttesa && <>
-                <dt className="text-slate-500">Richiesta in attesa</dt>
-                <dd>{new Date(inAttesa.inizio).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' })} (da confermare)</dd>
-              </>}
-            </dl>
-            <button onClick={() => void mostraRegistro(figlio)} className="mt-3 text-sm text-sky-700 underline">
-              Chi ha consultato i dati
-            </button>
-          </li>
+      <nav className="mb-4 flex gap-1 rounded-xl bg-slate-100 p-1 text-sm" aria-label="Sezioni del portale">
+        {([['figli', 'Figli'], ['consensi', `Consensi${daFirmare ? ` (${daFirmare})` : ''}`]] as const).map(([k, t]) => (
+          <button key={k} onClick={() => { setVista(k); setAperto(null); }} aria-current={vista === k ? 'page' : undefined}
+                  className={`flex-1 rounded-lg px-3 py-1.5 font-medium ${vista === k ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}>{t}</button>
         ))}
-      </ul>
+      </nav>
 
-      {registro && (
-        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-sm">
-          <h2 className="mb-2 font-semibold">Accessi ai dati di {registro.nome}</h2>
-          <ul className="space-y-1">
-            {registro.righe.map((r, i) => (
-              <li key={i}>
-                {new Date(r.avvenuto_il).toLocaleString('it-IT')} · {r.ruolo} · {r.azione}
+      {vista === 'consensi' ? <Consensi onCambio={() => setVersione((v) => v + 1)} />
+        : aperto ? <Figlio figlio={aperto} onIndietro={() => setAperto(null)} />
+        : (
+        <>
+          {dati === null && <p className="text-slate-500">Caricamento…</p>}
+          {errore && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-900">Si è verificato un errore: {errore}. Riprova più tardi.</p>}
+          {daFirmare > 0 && (
+            <button onClick={() => setVista('consensi')} className="mb-4 w-full rounded-xl border border-amber-200 bg-amber-50 p-3 text-left text-sm text-amber-900">
+              {daFirmare === 1 ? 'Un consenso è' : `${daFirmare} consensi sono`} in attesa di una tua scelta. <span className="underline">Apri i consensi</span>
+            </button>
+          )}
+          {dati?.length === 0 && !errore && (
+            <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+              Nessun figlio visibile. Per vedere i dati serve il tuo consenso «Portale genitori» (sezione Consensi); per visite e documenti
+              anche il consenso «Dati sanitari». Se non vedi tuo figlio nemmeno tra i consensi, chiedi allo studio di registrare il collegamento.
+            </p>
+          )}
+          <ul className="space-y-3">
+            {dati?.map(({ figlio, prossimo, inAttesa }) => (
+              <li key={figlio.paziente_id}>
+                <button onClick={() => setAperto(figlio)} className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left hover:border-sky-600">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-lg font-medium">{figlio.nome}</p>
+                      <p className="text-sm text-slate-500">{etaLeggibile(figlio.data_nascita, oggiISO())}</p>
+                    </div>
+                    <span className="text-sm text-sky-700">Apri ›</span>
+                  </div>
+                  <p className="mt-2 text-sm">
+                    <span className="text-slate-500">Prossimo appuntamento: </span>{prossimo ? dataOra(prossimo.inizio) : '—'}
+                    {inAttesa && <span className="block text-amber-800">Richiesta del {dataOra(inAttesa.inizio)} in attesa di conferma</span>}
+                  </p>
+                </button>
               </li>
             ))}
           </ul>
-        </section>
+        </>
       )}
     </div>
   );

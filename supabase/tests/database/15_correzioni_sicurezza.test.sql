@@ -13,14 +13,22 @@ returns void language sql as $$
 $$;
 grant execute on function pg_temp.come(uuid, text, uuid, boolean) to authenticated;
 
--- segreteria resa amministratore (beta)
-update anagrafica.membri_studio set amministratore = true where utente_id = 'a0000000-0000-4000-8000-000000000002';
+-- segreteria con token che la dichiara amministratore (la tabella non lo consente più)
 select pg_temp.come('a0000000-0000-4000-8000-000000000002', 'segreteria', 'c0000000-0000-4000-8000-000000000001', true);
 set local role authenticated;
-select ok(not sicurezza.allergologia_ok(), 'la segreteria amministratore NON accede ai dati allergologici');
+select ok(not sicurezza.allergologia_ok(), 'la segreteria NON accede ai dati allergologici');
 select is((select count(*)::int from clinica.allergo_diagnosi), 0, 'e non legge le diagnosi allergologiche');
+reset role;
+-- sostituto amministratore: non toglie il ruolo al pediatra titolare
+update anagrafica.membri_studio set amministratore = true where utente_id = 'a0000000-0000-4000-8000-000000000004';
+select pg_temp.come('a0000000-0000-4000-8000-000000000004', 'sostituto', 'c0000000-0000-4000-8000-000000000001', true);
+set local role authenticated;
 select throws_ok($$ select api.imposta_amministratore('a0000000-0000-4000-8000-000000000001', false) $$, 'P0001',
   'Solo un pediatra amministratore può revocare il ruolo a un pediatra', 'non toglie il ruolo al pediatra titolare');
+reset role;
+update anagrafica.membri_studio set amministratore = false where utente_id = 'a0000000-0000-4000-8000-000000000004';
+select pg_temp.come('a0000000-0000-4000-8000-000000000002', 'segreteria', 'c0000000-0000-4000-8000-000000000001', true);
+set local role authenticated;
 select throws_ok($$ select anagrafica.decifra_cf(codice_fiscale_cifrato) from anagrafica.pazienti $$, '42501', null,
   'il codice fiscale non si decifra senza registro accessi');
 select throws_ok($$ update anagrafica.pazienti set pediatra_id = 'a0000000-0000-4000-8000-000000000003' where id = 'd0000000-0000-4000-8000-000000000001' $$,
@@ -43,11 +51,15 @@ select is((select count(*)::int from anagrafica.appuntamenti), 0, 'il genitore n
 select lives_ok($$ select * from api.appuntamenti_figlio('d0000000-0000-4000-8000-000000000001') $$, 'ma vede data e stato con la RPC');
 select throws_ok($$ select * from api.appuntamenti_figlio('d0000000-0000-4000-8000-000000000003') $$, 'P0001', 'Non autorizzato',
   'non vede gli appuntamenti di bambini non suoi');
+reset role;
+-- il consenso cartaceo registrato dallo staff: data e autore li fissa comunque il database
+select pg_temp.come('a0000000-0000-4000-8000-000000000002', 'segreteria', 'c0000000-0000-4000-8000-000000000001', false);
+set local role authenticated;
 insert into anagrafica.consensi (paziente_id, tutore_id, finalita, versione_informativa, stato, canale, registrato_il, registrato_da)
-values ('d0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', 'comunicazioni', '2026-10', 'concesso', 'portale',
+values ('d0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', 'comunicazioni', '2026-10', 'concesso', 'cartaceo_studio',
         '2099-01-01', 'a0000000-0000-4000-8000-000000000001');
 reset role;
-select ok((select registrato_il < now() + interval '1 minute' and registrato_da = 'b0000000-0000-4000-8000-000000000001'
+select ok((select registrato_il < now() + interval '1 minute' and registrato_da = 'a0000000-0000-4000-8000-000000000002'
            from anagrafica.consensi where finalita = 'comunicazioni' order by registrato_il desc limit 1),
   'data e autore del consenso li fissa il database');
 

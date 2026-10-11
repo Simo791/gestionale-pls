@@ -66,8 +66,8 @@ select pg_temp.come('b0000000-0000-4000-8000-000000000001', 'tutore', null);
 set local role authenticated;
 select throws_ok($$ select * from api.consensi_incompleti() $$, 'P0001', null,
   'genitore: non accede alle funzioni dello staff');
-select is((select count(*)::int from clinica.vaccinazioni), 1,
-  'madre: vede il libretto vaccinale di Luca');
+select is(jsonb_array_length(api.portale_storico_figlio('d0000000-0000-4000-8000-000000000001') -> 'vaccini'), 1,
+  'madre: vede il libretto vaccinale di Luca (dal portale)');
 reset role;
 
 select * from finish();

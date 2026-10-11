@@ -76,6 +76,14 @@ const AZIONI: Record<string, string> = {
   ATTIVAZIONE_ALLERGOLOGIA: 'Attivazione modulo Allergologia',
   DISATTIVAZIONE_ALLERGOLOGIA: 'Disattivazione modulo Allergologia',
   APERTURA_CARTELLA_ALLERGO: 'Apertura cartella allergologica',
+  APERTURA_CARTELLA_LETTURA: 'Apertura cartella (segreteria, sola lettura)',
+  FIRMA_CONSENSO: 'Firma di un consenso sul portale',
+  CONSULTAZIONE_PORTALE: 'Consultazione dal portale genitori',
+  SCOLLEGA_ACCOUNT_GENITORE: 'Accesso al portale del genitore sospeso',
+  SBLOCCA_ACCOUNT_GENITORE: 'Accesso al portale del genitore riattivato',
+  CONCESSO_ACCESSO_CARTELLE: 'Segreteria autorizzata a consultare le cartelle',
+  REVOCA_ACCESSO_CARTELLE: 'Revocato l’accesso della segreteria alle cartelle',
+  IMPOSTA_INTEGRAZIONE: 'Impostazioni di un’integrazione',
 };
 export const etichettaAzione = (a: string) => AZIONI[a] ?? a;
 
@@ -108,6 +116,10 @@ const TABELLE: Record<string, string> = {
   'anagrafica.allergo_modelli': 'Modelli allergologia',
   'anagrafica.allergo_impostazioni': 'Impostazioni referto allergologia',
   'clinica.allergo_cartelle': 'Cartella allergologica',
+  'anagrafica.accompagnatori': 'Accompagnatore',
+  'anagrafica.permessi_cartelle': 'Accesso segreteria alle cartelle',
+  'anagrafica.integrazioni': 'Integrazioni',
+  'anagrafica.firme_consenso': 'Firma di consenso',
   'clinica.allergo_visite': 'Visita allergologica',
   'clinica.allergo_test': 'Test allergologico',
   'clinica.allergo_punteggi': 'Punteggio (SCORAD, ACT…)',

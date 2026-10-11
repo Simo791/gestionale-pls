@@ -30,7 +30,7 @@ select throws_ok($$ select api.registra_paziente_rapido('Paolo', 'Urgente', 'RGN
 select throws_ok($$ select api.registra_paziente_rapido('X', 'Y', 'CORTO', current_date, 'M',
     'a0000000-0000-4000-8000-000000000001') $$, 'P0001', 'Codice fiscale del bambino non valido', 'codice fiscale controllato');
 select throws_ok($$ select api.importa_catalogo_prestazioni('[{"codice_regionale":"X1","descrizione":"Prova"}]', 'v1') $$,
-  'P0001', 'Solo il pediatra può importare il catalogo delle prestazioni', 'la segreteria non importa il catalogo');
+  'P0001', 'Solo il pediatra o l''amministratore importa il catalogo delle prestazioni', 'la segreteria non importa il catalogo');
 reset role;
 
 -- ------------------------------------------------ pediatra

@@ -12,7 +12,7 @@ import { useState } from 'react';
 import AccessoRapido from '../componenti/AccessoRapido';
 import { NotificheNonLette } from '../componenti/Notifiche';
 import TurnoSostituzione from '../componenti/TurnoSostituzione';
-import { Badge, Bottone, Caricamento, Errore, Kpi, Pannello, Vuoto } from '../componenti/ui';
+import { Badge, Bottone, Caricamento, Errore, Kpi, Tendina, Vuoto } from '../componenti/ui';
 import { q, useDati } from '../lib/dati';
 import {
   ETICHETTA_FINALITA,
@@ -43,7 +43,7 @@ function confiniOggi() {
 }
 
 export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
-  const isPediatra = claims.app_ruolo === 'pediatra';
+  const isPediatra = claims.app_ruolo === 'pediatra' || claims.app_admin;
   const [accessoRapido, setAccessoRapido] = useState(false);
 
   const oggi = useDati(async () => {
@@ -115,25 +115,20 @@ export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
 
       {accessoRapido && <AccessoRapido claims={claims} onChiudi={() => setAccessoRapido(false)} />}
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <section className="grid gap-3 sm:grid-cols-3">
         <Kpi etichetta="Appuntamenti oggi" valore={oggi.dati?.length ?? '…'}
-             nota={daConfermareOggi ? `${daConfermareOggi} da confermare` : 'Tutti confermati'}
+             nota={daConfermareOggi ? `${daConfermareOggi} da confermare` : oggi.dati?.length ? 'Tutti confermati' : 'Nessun appuntamento'}
              tono="info" href={link('agenda')} />
         <Kpi etichetta="Richieste da confermare" valore={richieste.dati ?? '…'}
              nota="Prenotazioni future in attesa" tono={richieste.dati ? 'attenzione' : 'ok'} href={link('agenda')} />
         <Kpi etichetta="Da ricontattare" valore={daRichiamare.dati ?? '…'}
              nota="Genitori da richiamare oggi" tono={daRichiamare.dati ? 'attenzione' : 'ok'} href={link('agenda')} />
-        <Kpi etichetta="Bilanci di salute da programmare" valore={bilanci.dati?.length ?? '…'}
-             nota={bilanciInRitardo ? `${bilanciInRitardo} in ritardo` : 'Prossimi 60 giorni'}
-             tono={bilanciInRitardo ? 'attenzione' : 'neutro'} />
-        <Kpi etichetta="Consensi incompleti" valore={consensi.dati ? pazientiConsensiIncompleti : '…'}
-             nota="Bambini con un genitore che non ha firmato" tono={pazientiConsensiIncompleti ? 'attenzione' : 'ok'}
-             href={link('consensi')} />
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Pannello titolo="Agenda di oggi" sottotitolo="Appuntamenti non annullati"
-                  azione={<a href={link('agenda')} className="text-sm text-teal-700 underline">Apri agenda</a>}>
+      <div className="space-y-3">
+        <Tendina titolo="Agenda di oggi" sottotitolo="Appuntamenti non annullati" aperta
+                 conteggio={oggi.dati?.length ?? '…'} tono={daConfermareOggi ? 'attenzione' : 'info'}
+                 azione={<a href={link('agenda')} className="text-sm text-teal-700 underline">Apri agenda</a>}>
           {oggi.errore ? <Errore messaggio={oggi.errore} /> : oggi.caricamento ? <Caricamento /> :
             oggi.dati?.length === 0 ? <Vuoto testo="Nessun appuntamento oggi." /> : (
             <ul className="divide-y divide-slate-100">
@@ -149,12 +144,13 @@ export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
               ))}
             </ul>
           )}
-        </Pannello>
+        </Tendina>
 
-        <Pannello titolo="Bilanci di salute da programmare" sottotitolo="Scadenze nei prossimi 60 giorni senza appuntamento">
+        <Tendina titolo="Bilanci di salute da programmare" sottotitolo="Prossimi 60 giorni, senza appuntamento"
+                 conteggio={bilanci.dati?.length ?? '…'} tono={bilanciInRitardo ? 'attenzione' : 'neutro'}>
           {bilanci.errore ? <Errore messaggio={bilanci.errore} /> : bilanci.caricamento ? <Caricamento /> :
             bilanci.dati?.length === 0 ? <Vuoto testo="Nessun bilancio da programmare." /> : (
-            <ul className="divide-y divide-slate-100">
+            <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto">
               {bilanci.dati?.map((b) => (
                 <li key={`${b.paziente_id}-${b.eta_mesi}`} className="flex items-center gap-3 py-2 text-sm">
                   <a href={link('assistiti', b.paziente_id)} className="flex-1 truncate text-slate-800 hover:underline">
@@ -167,14 +163,15 @@ export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
               ))}
             </ul>
           )}
-        </Pannello>
+        </Tendina>
 
-        <Pannello titolo="Consensi da completare" sottotitolo="Dati sanitari e portale genitori"
-                  azione={<a href={link('consensi')} className="text-sm text-teal-700 underline">Vedi tutti</a>}>
+        <Tendina titolo="Consensi da completare" sottotitolo="Dati sanitari e portale genitori"
+                 conteggio={consensi.dati ? pazientiConsensiIncompleti : '…'} tono={pazientiConsensiIncompleti ? 'attenzione' : 'ok'}
+                 azione={<a href={link('consensi')} className="text-sm text-teal-700 underline">Vedi tutti</a>}>
           {consensi.errore ? <Errore messaggio={consensi.errore} /> : consensi.caricamento ? <Caricamento /> :
             consensi.dati?.length === 0 ? <Vuoto testo="Tutti i consensi sono completi." /> : (
-            <ul className="divide-y divide-slate-100">
-              {consensi.dati?.slice(0, 6).map((c) => (
+            <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto">
+              {consensi.dati?.map((c) => (
                 <li key={`${c.paziente_id}-${c.finalita}`} className="py-2 text-sm">
                   <a href={link('assistiti', c.paziente_id)} className="text-slate-800 hover:underline">
                     {c.cognome} {c.nome}
@@ -185,13 +182,14 @@ export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
               ))}
             </ul>
           )}
-        </Pannello>
+        </Tendina>
 
         {isPediatra && (
-          <Pannello titolo="Screening e controlli in scadenza" sottotitolo="Prossimi 30 giorni e scaduti senza esito">
+          <Tendina titolo="Screening e controlli in scadenza" sottotitolo="Prossimi 30 giorni e scaduti senza esito"
+                   conteggio={controlli.dati?.length ?? '…'} tono={(controlli.dati ?? []).some((c) => c.scaduto) ? 'errore' : 'neutro'}>
             {controlli.errore ? <Errore messaggio={controlli.errore} /> : controlli.caricamento ? <Caricamento /> :
               controlli.dati?.length === 0 ? <Vuoto testo="Nessun controllo in scadenza." /> : (
-              <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
+              <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto">
                 {controlli.dati?.map((c) => (
                   <li key={`${c.paziente_id}-${c.codice}`} className="flex items-center gap-3 py-2 text-sm">
                     <a href={link('assistiti', c.paziente_id)} className="flex-1 truncate text-slate-800 hover:underline">
@@ -204,12 +202,12 @@ export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
                 ))}
               </ul>
             )}
-          </Pannello>
+          </Tendina>
         )}
 
-        {isPediatra ? (
-          <Pannello titolo="Attività recente" sottotitolo="Dal registro di audit"
-                    azione={<a href={link('registro')} className="text-sm text-teal-700 underline">Registro completo</a>}>
+        {isPediatra && (
+          <Tendina titolo="Attività recente" sottotitolo="Ultimi eventi del registro di audit" conteggio={attivita.dati?.length ?? '…'}
+                   azione={<a href={link('registro')} className="text-sm text-teal-700 underline">Registro completo</a>}>
             {attivita.errore ? <Errore messaggio={attivita.errore} /> : attivita.caricamento ? <Caricamento /> :
               attivita.dati?.length === 0 ? <Vuoto testo="Nessuna attività." /> : (
               <ul className="divide-y divide-slate-100">
@@ -223,14 +221,7 @@ export default function Cruscotto({ claims }: { claims: ClaimsApp }) {
                 ))}
               </ul>
             )}
-          </Pannello>
-        ) : (
-          <Pannello titolo="Privacy" sottotitolo="Cosa vede la segreteria">
-            <p className="text-sm text-slate-600">
-              Anagrafiche, agenda e consensi. Le cartelle cliniche sono visibili solo al pediatra titolare,
-              e ogni accesso ai dati sensibili, incluso il codice fiscale, viene registrato.
-            </p>
-          </Pannello>
+          </Tendina>
         )}
       </div>
     </div>

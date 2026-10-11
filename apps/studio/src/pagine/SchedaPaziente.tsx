@@ -27,6 +27,7 @@ import {
   type Visita,
 } from '@pls/shared';
 import { useEffect, useState } from 'react';
+import { nomeAccompagnatore, PannelloAccompagnatori, useAccompagnatori } from '../componenti/Accompagnatori';
 import Allergie from '../componenti/Allergie';
 import PatologieBambino from '../componenti/PatologieBambino';
 import Prescrizioni from '../componenti/Prescrizioni';
@@ -86,7 +87,13 @@ const ana = () => supabase.schema('anagrafica');
 
 /** Scheda del bambino: anagrafica, genitori e consensi, appuntamenti e (solo pediatra) cartella clinica. */
 export default function SchedaPaziente({ id, claims, azione }: { id: string; claims: ClaimsApp; azione?: string }) {
-  const puoVedereClinica = claims.app_ruolo === 'pediatra' || claims.app_ruolo === 'sostituto';
+  // Medico (titolare, sostituto in turno) o amministratore: cartella completa.
+  // Segreteria autorizzata dal pediatra: sola lettura (lo impone il database).
+  const medico = claims.app_ruolo === 'pediatra' || claims.app_ruolo === 'sostituto' || (claims.app_admin && claims.app_ruolo !== 'segreteria');
+  // Il permesso vale per i pazienti del pediatra che l'ha dato: si legge dal database (effetto immediato).
+  const permessiMiei = useDati(async () => (claims.app_ruolo === 'segreteria'
+    ? q<{ pediatra_id: string }[]>(supabase.schema('anagrafica').from('permessi_cartelle').select('pediatra_id').eq('segreteria_id', claims.sub))
+    : []), []);
   const [cf, setCf] = useState<string | null>(null);
   const [clinica, setClinica] = useState<DatiClinici | null>(null);
   const [erroreAzione, setErroreAzione] = useState<string | null>(null);
@@ -118,6 +125,16 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
   );
 
   const intestazione = useIntestazione(paziente.dati?.pediatra_id);
+  const solaLettura = !medico && claims.app_ruolo === 'segreteria'
+    && (permessiMiei.dati ?? []).some((x) => x.pediatra_id === paziente.dati?.pediatra_id);
+  const puoVedereClinica = medico || solaLettura;
+  const accompagnatori = useAccompagnatori(id);
+  const firme = useDati(async () => {
+    const ids = (consensi.dati ?? []).filter((c) => c.canale === 'portale').map((c) => c.id);
+    if (ids.length === 0) return new Set<string>();
+    const r = await q<{ consenso_id: string }[]>(ana().from('firme_consenso').select('consenso_id').in('consenso_id', ids));
+    return new Set(r.map((x) => x.consenso_id));
+  }, [consensi.dati]);
 
   async function mostraCf() {
     setErroreAzione(null);
@@ -156,7 +173,7 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
 
   // Arrivo da "Urgenza / senza appuntamento": apre subito cartella e visita odierna.
   useEffect(() => {
-    if (azione === 'visita' && puoVedereClinica) void apriCartella();
+    if (azione === 'visita' && medico) void apriCartella();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -289,6 +306,12 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
   }
 
   const descrizioniDiagnosi = new Map((diagnosi.dati ?? []).map((d) => [d.codice, d.descrizione]));
+  // Riferimenti opachi dei presenti alle visite → nomi (solo dall'anagrafica).
+  const nomiPresenti = new Map<string, string>([
+    ...(paziente.dati?.relazioni_tutela ?? []).filter((r) => r.tutori)
+      .map((r) => [`t:${r.tutori!.id}`, `${ETICHETTA_RELAZIONE[r.tipo]} (${r.tutori!.nome} ${r.tutori!.cognome})`] as [string, string]),
+    ...(accompagnatori.dati ?? []).map((a) => [`a:${a.id}`, nomeAccompagnatore(a)] as [string, string]),
+  ]);
 
   function correntiConsensi() {
     const mappa = new Map<string, Consenso>();
@@ -322,8 +345,9 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
       {puoVedereClinica && !clinica && (
         <Pannello titolo="Cartella clinica" sottotitolo="Curve di crescita, visite e dati clinici · l'apertura viene registrata nel registro di audit">
           <Bottone variante="primario" onClick={() => void apriCartella()} disabled={apertura}>
-            {apertura ? 'Apertura…' : 'Apri cartella clinica'}
+            {apertura ? 'Apertura…' : solaLettura ? 'Apri cartella (sola lettura)' : 'Apri cartella clinica'}
           </Bottone>
+          {solaLettura && <p className="mt-2 text-xs text-slate-500">Il pediatra ti ha consentito di consultare le cartelle dei suoi assistiti, senza modificarle.</p>}
         </Pannello>
       )}
 
@@ -397,6 +421,10 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
         </Pannello>
       </div>
 
+      <Pannello titolo="Altri accompagnatori" sottotitolo="Chi può portare il bambino in studio oltre ai genitori: nome, cognome, grado di parentela e delega">
+        <PannelloAccompagnatori pazienteId={p.id} studioId={p.studio_id} />
+      </Pannello>
+
       <Pannello titolo="Consensi" sottotitolo={`Informativa versione ${VERSIONE_INFORMATIVA} · i consensi cartacei si registrano qui`}>
         {consensi.errore ? <Errore messaggio={consensi.errore} /> : consensi.caricamento ? <Caricamento /> : (
           <div className="-mx-4 overflow-x-auto">
@@ -418,6 +446,9 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
                           {c ? (
                             <span title={`${c.canale === 'portale' ? 'Dal portale' : 'Cartaceo in studio'} · ${fmtDataOra(c.registrato_il)}`}>
                               <Badge tono={STATO_CONSENSO[c.stato].tono}>{STATO_CONSENSO[c.stato].testo}</Badge>
+                              <span className="block text-[11px] text-slate-500">
+                                {c.canale === 'portale' ? (firme.dati?.has(c.id) ? 'Portale · firmato' : 'Portale') : 'Cartaceo'}
+                              </span>
                             </span>
                           ) : r.responsabilita_genitoriale ? (
                             <button onClick={() => void registraConsenso(r.tutori!.id, f)} className="text-xs text-teal-700 underline">
@@ -463,11 +494,18 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
       {!puoVedereClinica ? (
         <Pannello titolo="Cartella clinica">
           <p className="text-sm text-slate-600">
-            I dati clinici sono visibili solo al pediatra titolare. Il database lo impone a ogni richiesta:
-            non è solo un pulsante nascosto.
+            I dati clinici sono visibili al pediatra titolare e, solo se lui lo consente, alla segreteria in sola lettura.
+            Il database lo impone a ogni richiesta: non è solo un pulsante nascosto.
           </p>
         </Pannello>
-      ) : !clinica ? null : (
+      ) : !clinica ? null : solaLettura ? (
+        <CartellaAperta dati={clinica} paziente={p} solaLettura onVacciniCambiati={() => void ricaricaVaccini()}
+                        onApriVisita={(v) => setDettaglio({ tipo: 'visita', visita: v })}
+                        onCertificato={(c) => stampaCertificato(c)}
+                        onStampaAvviso={(r) => void stampaClinico((b) => docAvvisoVaccino(b, r))}
+                        onDocumentoAllergia={() => undefined}
+                        onReferto={(v) => void stampaClinico((b) => docVisita(b, v, clinica.misure.find((m) => m.visita_id === v.id) ?? null, p.sesso, nomiPresenti))} />
+      ) : (
         <>
           <Pannello titolo="Visita odierna" sottotitolo={`${fmtGiornoIso(oggiIso())} · ultima visita, promemoria per i genitori, misure e parametri`}
                     azione={!visitaAperta && <Bottone variante="primario" onClick={() => { setVisitaAperta(true); setUltimaSalvata(null); }}>Inizia visita</Bottone>}>
@@ -475,14 +513,16 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
               <VisitaOdierna
                 pseudo={clinica.pseudo} paziente={p} cartella={clinica.cartella} misure={clinica.misure}
                 vaccini={clinica.vaccini} visite={clinica.visite}
-                genitori={p.relazioni_tutela.filter((r) => r.tutori).map((r) => ({ nome: `${r.tutori!.nome} ${r.tutori!.cognome}`, tipo: r.tipo }))}
+                genitori={p.relazioni_tutela.filter((r) => r.tutori).map((r) => ({ id: r.tutori!.id, nome: `${r.tutori!.nome} ${r.tutori!.cognome}`, tipo: r.tipo }))}
+                accompagnatori={accompagnatori.dati ?? []}
+                onAccompagnatoreAggiunto={() => accompagnatori.ricarica()}
                 onChiudi={() => setVisitaAperta(false)}
-                onSalvata={(visita, misura) => { setUltimaSalvata({ visita, misura }); setVisitaAperta(false); void caricaClinica(clinica.pseudo); }}
+                onSalvata={(visita, misura) => { setUltimaSalvata({ visita, misura }); setVisitaAperta(false); void caricaClinica(clinica.pseudo); accompagnatori.ricarica(); }}
               />
             ) : ultimaSalvata ? (
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-emerald-800">Visita salvata{ultimaSalvata.misura ? ' con le misure' : ''}.</span>
-                <Bottone onClick={() => void stampaClinico((b) => docVisita(b, ultimaSalvata.visita, ultimaSalvata.misura, p.sesso))}>Referto PDF</Bottone>
+                <Bottone onClick={() => void stampaClinico((b) => docVisita(b, ultimaSalvata.visita, ultimaSalvata.misura, p.sesso, nomiPresenti))}>Referto PDF</Bottone>
                 <a href="#prescrizioni" className="text-teal-700 underline">Prescrivi esami o visite</a>
                 {ultimaSalvata.visita.prossimo_controllo && <a href={link('agenda')} className="text-teal-700 underline">Fissa il controllo del {fmtGiornoIso(ultimaSalvata.visita.prossimo_controllo)} in agenda</a>}
               </div>
@@ -509,7 +549,7 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
                           onCertificato={(c) => stampaCertificato(c)}
                           onStampaAvviso={(r) => void stampaClinico((b) => docAvvisoVaccino(b, r))}
                           onDocumentoAllergia={(tipo, allergie, scelte) => setCertificato({ tipo, allergie, scelte })}
-                          onReferto={(v) => void stampaClinico((b) => docVisita(b, v, clinica.misure.find((m) => m.visita_id === v.id) ?? null, p.sesso))} />
+                          onReferto={(v) => void stampaClinico((b) => docVisita(b, v, clinica.misure.find((m) => m.visita_id === v.id) ?? null, p.sesso, nomiPresenti))} />
         </>
       )}
 
@@ -517,9 +557,9 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
         <Finestra larga titolo={dettaglio.tipo === 'visita' ? `Visita del ${fmtData(dettaglio.visita.data)}` : dettaglio.tipo === 'certificati' ? `Certificati del ${dettaglio.data}` : `Appuntamento del ${dettaglio.data}`}
                   onChiudi={() => setDettaglio(null)}>
           {dettaglio.tipo === 'visita' && (
-            <DettaglioVisita v={dettaglio.visita} sesso={p.sesso} descrizioni={descrizioniDiagnosi}
+            <DettaglioVisita v={dettaglio.visita} sesso={p.sesso} descrizioni={descrizioniDiagnosi} nomiPresenti={nomiPresenti}
                              misura={clinica.misure.find((m) => m.visita_id === dettaglio.visita.id) ?? null}
-                             onReferto={() => void stampaClinico((b) => docVisita(b, dettaglio.visita, clinica.misure.find((m) => m.visita_id === dettaglio.visita.id) ?? null, p.sesso))} />
+                             onReferto={() => void stampaClinico((b) => docVisita(b, dettaglio.visita, clinica.misure.find((m) => m.visita_id === dettaglio.visita.id) ?? null, p.sesso, nomiPresenti))} />
           )}
           {dettaglio.tipo === 'nessuna_visita' && <p className="text-sm text-slate-600">Nessuna visita registrata in cartella per questa data.</p>}
           {dettaglio.tipo === 'certificati' && (dettaglio.elenco.length === 0
@@ -539,8 +579,10 @@ export default function SchedaPaziente({ id, claims, azione }: { id: string; cla
   );
 }
 
-function CartellaAperta({ dati, paziente, onVacciniCambiati, onReferto, onApriVisita, onCertificato, onDocumentoAllergia, onStampaAvviso }: {
+function CartellaAperta({ dati, paziente, solaLettura = false, onVacciniCambiati, onReferto, onApriVisita, onCertificato, onDocumentoAllergia, onStampaAvviso }: {
   onStampaAvviso: (r: RigaLibretto) => void;
+  /** Segreteria autorizzata: i moduli di modifica restano visibili ma disattivati. */
+  solaLettura?: boolean;
   dati: DatiClinici; paziente: Paziente; onVacciniCambiati: () => void; onReferto: (v: Visita) => void;
   onApriVisita: (v: Visita) => void; onCertificato: (c: Certificato) => void;
   onDocumentoAllergia: (tipo: 'dieta_speciale' | 'dieta_esclusione', allergie: AllergeneCertificato[], scelte: string[]) => void;
@@ -548,7 +590,7 @@ function CartellaAperta({ dati, paziente, onVacciniCambiati, onReferto, onApriVi
   const { pseudo, cartella, vaccini, visite, certificati } = dati;
   return (
     <div className="space-y-6">
-      <Pannello titolo="Cartella clinica" sottotitolo="Apertura registrata nel registro di audit">
+      <Pannello titolo="Cartella clinica" sottotitolo={solaLettura ? 'Sola lettura · apertura registrata nel registro di audit' : 'Apertura registrata nel registro di audit'}>
         <dl className="grid gap-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-slate-500">Annotazioni libere</dt>
@@ -564,20 +606,21 @@ function CartellaAperta({ dati, paziente, onVacciniCambiati, onReferto, onApriVi
       </Pannello>
 
       <Pannello titolo="Patologie ed esenzioni" sottotitolo="Malattie rare e croniche collegate al catalogo, con codice di esenzione">
-        <PatologieBambino pseudoId={pseudo} />
+        <PatologieBambino pseudoId={pseudo} solaLettura={solaLettura} />
       </Pannello>
 
       <Pannello titolo="Allergie" sottotitolo="Allergeni, reazione, gravità e test · certificato mensa e dieta di esclusione">
-        <Allergie pseudoId={pseudo} legacy={cartella?.allergie ?? []} onDocumento={onDocumentoAllergia} />
+        <Allergie pseudoId={pseudo} legacy={cartella?.allergie ?? []} onDocumento={onDocumentoAllergia} solaLettura={solaLettura} />
       </Pannello>
 
       <Pannello titolo="Libretto vaccinale" sottotitolo="Calendario nazionale, dosi eseguite e scadenze">
-        <LibrettoVaccinale pseudoId={pseudo} dataNascita={paziente.data_nascita} vaccini={vaccini} onCambiato={onVacciniCambiati} onStampaAvviso={onStampaAvviso} />
+        <LibrettoVaccinale pseudoId={pseudo} dataNascita={paziente.data_nascita} vaccini={vaccini} onCambiato={onVacciniCambiati} onStampaAvviso={onStampaAvviso} solaLettura={solaLettura} />
       </Pannello>
 
       <Pannello titolo="Screening e controlli" sottotitolo="Finestre raccomandate per età, esiti registrati e fonti">
-        <ControlliScreening pseudoId={pseudo} dataNascita={paziente.data_nascita} fattoriRischio={cartella?.fattori_rischio ?? []} />
+        <ControlliScreening pseudoId={pseudo} dataNascita={paziente.data_nascita} fattoriRischio={cartella?.fattori_rischio ?? []} solaLettura={solaLettura} />
       </Pannello>
+
 
       <Pannello titolo={`Visite (${visite.length})`} sottotitolo="Tutte le visite registrate da quando il bambino è in carico · clicca per aprirle">
         {visite.length === 0 ? <Vuoto testo="Nessuna visita registrata." /> : (

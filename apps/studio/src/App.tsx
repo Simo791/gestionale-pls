@@ -7,6 +7,7 @@ import { supabase } from './lib/supabase';
 import Accesso from './pagine/Accesso';
 import Account from './pagine/Account';
 import Agenda from './pagine/Agenda';
+import Amministrazione from './pagine/Amministrazione';
 import Allergologia from './pagine/Allergologia';
 import Assistiti from './pagine/Assistiti';
 import Consensi from './pagine/Consensi';
@@ -45,8 +46,8 @@ function Applicazione({ claims }: { claims: ClaimsApp }) {
     [],
   );
 
-  // L'allergologo vede solo il modulo Allergologia (e il proprio account).
-  const sezione = claims.app_ruolo === 'allergologo' && rotta.sezione !== 'account' ? 'allergologia' : rotta.sezione;
+  // L'allergologo (non amministratore) vede solo il modulo Allergologia e il proprio account.
+  const sezione = claims.app_ruolo === 'allergologo' && !claims.app_admin && rotta.sezione !== 'account' ? 'allergologia' : rotta.sezione;
 
   let pagina;
   switch (sezione) {
@@ -65,7 +66,10 @@ function Applicazione({ claims }: { claims: ClaimsApp }) {
       pagina = <Consensi />;
       break;
     case 'registro':
-      pagina = claims.app_ruolo === 'pediatra' ? <Registro /> : <Cruscotto claims={claims} />;
+      pagina = claims.app_ruolo === 'pediatra' || claims.app_admin ? <Registro /> : <Cruscotto claims={claims} />;
+      break;
+    case 'amministrazione':
+      pagina = claims.app_admin ? <Amministrazione claims={claims} sezione={rotta.id} /> : <Cruscotto claims={claims} />;
       break;
     case 'patologie':
       pagina = <Patologie key={rotta.id ?? 'catalogo'} claims={claims} codice={rotta.id} />;

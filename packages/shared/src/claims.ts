@@ -7,10 +7,12 @@ export interface ClaimsApp {
   aal: 'aal1' | 'aal2';
   app_ruolo: RuoloApp;
   app_studio_id?: UUID;
-  /** Amministratore dello studio (gestisce staff e sostituzioni). */
+  /** Amministratore dello studio: può fare tutto (mai la segreteria). */
   app_admin: boolean;
   /** Vede la sezione Allergologia (modulo attivo + amministratore o allergologo accettato). */
   app_allergologia: boolean;
+  /** Segreteria autorizzata da un pediatra a consultare le cartelle (sola lettura). */
+  app_cartelle: boolean;
 }
 
 const RUOLI: readonly RuoloApp[] = ['pediatra', 'segreteria', 'sostituto', 'allergologo', 'tutore', 'nessuno'];
@@ -38,8 +40,9 @@ export function leggiClaims(accessToken: string): ClaimsApp | null {
       aal: dati.aal === 'aal2' ? 'aal2' : 'aal1',
       app_ruolo: ruolo,
       app_studio_id: typeof dati.app_studio_id === 'string' ? dati.app_studio_id : undefined,
-      app_admin: dati.app_admin === true && (isStaff(ruolo) || ruolo === 'allergologo'),
+      app_admin: dati.app_admin === true && (ruolo === 'pediatra' || ruolo === 'sostituto' || ruolo === 'allergologo'),
       app_allergologia: dati.app_allergologia === true && ruolo !== 'tutore' && ruolo !== 'segreteria',
+      app_cartelle: dati.app_cartelle === true && ruolo === 'segreteria',
     };
   } catch {
     return null;

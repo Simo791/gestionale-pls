@@ -24,6 +24,7 @@ import { q, useDati } from '../lib/dati';
 import { ETICHETTA_RELAZIONE, ETICHETTA_TIPO_VISITA, fmtData, fmtGiornoIso, oggiIso } from '../lib/formato';
 import { link } from '../lib/rotta';
 import { supabase } from '../lib/supabase';
+import { accompagnatoreValido, CampiAccompagnatore, nomeAccompagnatore, type Accompagnatore } from './Accompagnatori';
 import InserisciModello from './InserisciModello';
 import { righeLibretto } from './LibrettoVaccinale';
 import SceltaDiagnosi from './SceltaDiagnosi';
@@ -73,9 +74,13 @@ export function parametriVitali(v: Visita) {
  * della visita con misure antropometriche, parametri vitali e indicazioni.
  */
 export default function VisitaOdierna({
-  pseudo, paziente, cartella, misure, vaccini, visite, genitori, onSalvata, onChiudi,
+  pseudo, paziente, cartella, misure, vaccini, visite, genitori, accompagnatori, onAccompagnatoreAggiunto, onSalvata, onChiudi,
 }: {
-  genitori: { nome: string; tipo: TipoRelazione }[];
+  /** Ricarica gli accompagnatori appena aggiunto uno nuovo (resta selezionabile anche se la visita non si salva). */
+  onAccompagnatoreAggiunto?: () => void;
+  genitori: { id: string; nome: string; tipo: TipoRelazione }[];
+  /** Accompagnatori registrati nell'anagrafica del bambino (solo gli autorizzati). */
+  accompagnatori: Accompagnatore[];
   pseudo: string;
   paziente: Paziente;
   cartella: CartellaClinica | null;
@@ -97,7 +102,7 @@ export default function VisitaOdierna({
   });
   const [codici, setCodici] = useState<string[]>([]);
   const [presenti, setPresenti] = useState<string[]>([]);
-  const [altro, setAltro] = useState({ attivo: false, testo: '' });
+  const [altro, setAltro] = useState({ attivo: false, nome: '', cognome: '', parentela: '', delega: false });
   const [scelti, setScelti] = useState<Set<string>>(new Set());
   const [errore, setErrore] = useState<string | null>(null);
   const [salvataggio, setSalvataggio] = useState(false);
@@ -214,17 +219,31 @@ export default function VisitaOdierna({
     const diagnosi = codici;
     const errati = diagnosi.filter((d) => !CODICE_ICD9.test(d));
     if (errati.length) return setErrore(`Codici ICD-9-CM non riconosciuti: ${errati.join(', ')}.`);
-    if (altro.attivo && !altro.testo.trim()) return setErrore('Indica chi accompagna il bambino («Altro»).');
-    const accompagnatori = [...presenti, ...(altro.attivo ? [altro.testo.trim()] : [])];
+    if (altro.attivo && !accompagnatoreValido(altro)) {
+      return setErrore('Altro accompagnatore: nome, cognome e grado di parentela sono obbligatori.');
+    }
 
     setSalvataggio(true);
     try {
+      // Il nuovo accompagnatore entra nell'anagrafica del bambino; nella visita resta solo il riferimento.
+      const nuovi: string[] = [];
+      if (altro.attivo) {
+        const a = await q<{ id: string }>(ana().from('accompagnatori').insert({
+          studio_id: paziente.studio_id, paziente_id: paziente.id, nome: altro.nome.trim(), cognome: altro.cognome.trim(),
+          parentela: altro.parentela, delega: altro.delega,
+        }).select('id').single());
+        nuovi.push(`a:${a.id}`);
+        onAccompagnatoreAggiunto?.();
+        setAltro({ attivo: false, nome: '', cognome: '', parentela: '', delega: false });
+        setPresenti((x) => [...x, `a:${a.id}`]);
+      }
+      const presentiVisita = [...presenti, ...nuovi];
       const visita = await q<Visita>(cli().from('visite').insert({
         pseudo_id: pseudo, tipo: f.tipo, motivo: f.motivo.trim(), anamnesi: f.anamnesi.trim() || null,
         esame_obiettivo: f.esame.trim() || null, diagnosi_icd9cm: diagnosi, terapia: f.terapia.trim() || null,
         temperatura_c: n.temperatura, frequenza_cardiaca: n.fc, frequenza_respiratoria: n.fr, saturazione_o2: n.spo2,
         pa_sistolica: n.pas, pa_diastolica: n.pad, indicazioni_genitori: f.indicazioni.trim() || null,
-        prossimo_controllo: f.prossimo || null, accompagnatori,
+        prossimo_controllo: f.prossimo || null, accompagnatori: presentiVisita,
       }).select('*').single());
       let misura: Misurazione | null = null;
       if (n.peso !== null || n.altezza !== null || n.cc !== null) {
@@ -347,25 +366,25 @@ export default function VisitaOdierna({
           <fieldset className="text-sm md:col-span-2">
             <legend className="text-slate-500">Presenti alla visita</legend>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-              {genitori.map((g) => {
-                const etichetta = `${ETICHETTA_RELAZIONE[g.tipo]} (${g.nome})`;
-                return (
-                  <label key={etichetta} className="flex items-center gap-1.5">
-                    <input type="checkbox" checked={presenti.includes(etichetta)}
-                           onChange={(e) => setPresenti(e.target.checked ? [...presenti, etichetta] : presenti.filter((x) => x !== etichetta))} />
-                    {etichetta}
+              {[...genitori.map((g) => ({ codice: `t:${g.id}`, etichetta: `${ETICHETTA_RELAZIONE[g.tipo]} (${g.nome})`, nota: '' })),
+                ...accompagnatori.filter((a) => a.attivo).map((a) => ({ codice: `a:${a.id}`, etichetta: nomeAccompagnatore(a), nota: a.delega ? '' : 'senza delega scritta' }))]
+                .map(({ codice, etichetta, nota }) => (
+                  <label key={codice} className="flex items-center gap-1.5">
+                    <input type="checkbox" checked={presenti.includes(codice)}
+                           onChange={(e) => setPresenti(e.target.checked ? [...presenti, codice] : presenti.filter((x) => x !== codice))} />
+                    {etichetta}{nota && <span className="text-xs text-amber-700">({nota})</span>}
                   </label>
-                );
-              })}
+                ))}
               <label className="flex items-center gap-1.5">
-                <input type="checkbox" checked={altro.attivo} onChange={(e) => setAltro({ ...altro, attivo: e.target.checked })} /> Altro
+                <input type="checkbox" checked={altro.attivo} onChange={(e) => setAltro({ ...altro, attivo: e.target.checked })} /> Altro accompagnatore
               </label>
-              {altro.attivo && (
-                <input autoFocus value={altro.testo} onChange={(e) => setAltro({ ...altro, testo: e.target.value })}
-                       placeholder="Es. nonna materna, zio, baby-sitter con delega" aria-label="Chi accompagna il bambino"
-                       className="min-w-64 flex-1 rounded-lg border border-slate-300 px-2 py-1" />
-              )}
             </div>
+            {altro.attivo && (
+              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-2 text-xs text-slate-600">Viene aggiunto all'anagrafica del bambino (Accompagnatori) e collegato a questa visita.</p>
+                <CampiAccompagnatore v={altro} onChange={(x) => setAltro({ ...altro, ...x })} />
+              </div>
+            )}
           </fieldset>
           {campo('anamnesi', 'Anamnesi recente', { area: true, largo: true, modello: 'anamnesi' })}
         </div>

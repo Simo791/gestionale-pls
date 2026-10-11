@@ -58,3 +58,57 @@ export function proponiColonne(intestazioni: string[]): Record<CampoCatalogo, nu
     nota_erogabilita: trova((x) => /nota/.test(x)),
   };
 }
+
+/**
+ * Riga di intestazione: i file regionali spesso iniziano con titoli
+ * ("CATALOGO REGIONALE…", "Allegato 1") prima della vera intestazione.
+ * Sceglie, tra le prime righe, quella in cui si riconoscono codice e descrizione.
+ */
+export function trovaIntestazione(righe: string[][], max = 20): number {
+  let migliore = 0;
+  let punteggio = -1;
+  righe.slice(0, max).forEach((r, i) => {
+    const c = proponiColonne(r);
+    const p = (c.codice_regionale >= 0 ? 2 : 0) + (c.descrizione >= 0 ? 2 : 0)
+      + (c.codice_nazionale >= 0 ? 1 : 0) + (c.branca >= 0 ? 1 : 0) + (c.nota_erogabilita >= 0 ? 1 : 0);
+    if (p > punteggio && c.codice_regionale >= 0 && c.descrizione >= 0) {
+      migliore = i;
+      punteggio = p;
+    }
+  });
+  return migliore;
+}
+
+export type RigaCatalogo = Record<CampoCatalogo, string>;
+
+/**
+ * Prepara le righe per l'importazione: scarta titoli e righe senza codice o
+ * descrizione e unisce i codici ripetuti (nel catalogo regionale lo stesso codice
+ * può comparire su più righe, ad esempio una per branca). Della stessa prestazione
+ * si tiene la prima descrizione e si uniscono branche e note diverse.
+ */
+export function unisciDoppioni(righe: RigaCatalogo[]): { righe: RigaCatalogo[]; doppioni: number; scartate: number } {
+  const perCodice = new Map<string, RigaCatalogo>();
+  let doppioni = 0;
+  let scartate = 0;
+  const aggiungi = (a: string, b: string, sep: string) => {
+    const parti = a ? a.split(sep) : [];
+    return b && !parti.includes(b) ? [...parti, b].join(sep) : a;
+  };
+  for (const r of righe) {
+    const codice = r.codice_regionale.trim();
+    const descrizione = r.descrizione.trim();
+    if (!codice || !descrizione || /^cod/i.test(codice)) { scartate++; continue; }
+    const pulita: RigaCatalogo = {
+      codice_regionale: codice, descrizione, codice_nazionale: r.codice_nazionale.trim(),
+      branca: r.branca.trim(), nota_erogabilita: r.nota_erogabilita.trim(),
+    };
+    const esistente = perCodice.get(codice);
+    if (!esistente) { perCodice.set(codice, pulita); continue; }
+    doppioni++;
+    esistente.codice_nazionale ||= pulita.codice_nazionale;
+    esistente.branca = aggiungi(esistente.branca, pulita.branca, ', ');
+    esistente.nota_erogabilita = aggiungi(esistente.nota_erogabilita, pulita.nota_erogabilita, ' · ');
+  }
+  return { righe: [...perCodice.values()], doppioni, scartate };
+}

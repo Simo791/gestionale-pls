@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
  * niente librerie aggiuntive, il tasto "indietro" del browser funziona e
  * ogni pagina ha un indirizzo che si può salvare nei preferiti.
  */
-export type Sezione = 'cruscotto' | 'agenda' | 'assistiti' | 'allergologia' | 'consensi' | 'registro' | 'patologie' | 'account';
+export type Sezione = 'cruscotto' | 'agenda' | 'assistiti' | 'allergologia' | 'consensi' | 'registro' | 'patologie' | 'amministrazione' | 'account';
 
 export interface Rotta {
   sezione: Sezione;
@@ -14,7 +14,7 @@ export interface Rotta {
   azione?: string;
 }
 
-const SEZIONI: readonly Sezione[] = ['cruscotto', 'agenda', 'assistiti', 'allergologia', 'consensi', 'registro', 'patologie', 'account'];
+const SEZIONI: readonly Sezione[] = ['cruscotto', 'agenda', 'assistiti', 'allergologia', 'consensi', 'registro', 'patologie', 'amministrazione', 'account'];
 
 function leggi(): Rotta {
   const [sezione, id, azione] = window.location.hash.replace(/^#\/?/, '').split('/');

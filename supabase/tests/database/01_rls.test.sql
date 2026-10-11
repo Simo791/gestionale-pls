@@ -7,7 +7,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path to public, extensions;
 
-select plan(22);
+select plan(26);
 
 -- Helper: imposta i claim come farebbe PostgREST con il JWT dell'utente.
 create function pg_temp.come(p_sub uuid, p_ruolo text, p_studio uuid, p_aal text default 'aal1')
@@ -94,8 +94,10 @@ select pg_temp.come('b0000000-0000-4000-8000-000000000001', 'tutore', null);
 set local role authenticated;
 select is((select count(*)::int from anagrafica.pazienti), 2,
   'madre: vede entrambi i figli');
-select is((select count(*)::int from clinica.misurazioni), 6,
-  'madre: vede le misurazioni di Luca (curve di crescita)');
+select is((select count(*)::int from clinica.misurazioni), 0,
+  'madre: non legge direttamente le tabelle cliniche');
+select is(jsonb_array_length(api.portale_storico_figlio('d0000000-0000-4000-8000-000000000001') -> 'misure'), 6,
+  'madre: vede le misurazioni di Luca dal portale (curve di crescita)');
 select is((select count(*)::int from clinica.cartelle), 0,
   'madre: non vede anamnesi e cartella');
 select throws_ok($$ insert into anagrafica.consensi (paziente_id, tutore_id, finalita,
@@ -110,9 +112,12 @@ select pg_temp.come('b0000000-0000-4000-8000-000000000002', 'tutore', null);
 set local role authenticated;
 select is((select count(*)::int from anagrafica.pazienti), 1,
   'padre: vede solo Luca (per Sofia non ha ancora dato il consenso al portale)');
-insert into anagrafica.consensi (paziente_id, tutore_id, finalita, versione_informativa, stato, canale)
-values ('d0000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000002',
-        'portale', '2026-10', 'concesso', 'portale');
+select throws_ok($$ insert into anagrafica.consensi (paziente_id, tutore_id, finalita, versione_informativa, stato, canale)
+  values ('d0000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000002', 'portale', '2026-10', 'concesso', 'portale') $$,
+  '42501', null, 'padre: il consenso non si inserisce direttamente (serve informativa + firma)');
+select lives_ok($$ select api.segna_informativa_letta('d0000000-0000-4000-8000-000000000002', 'portale') $$, 'padre: apre l''informativa');
+select lives_ok($$ select api.firma_consenso('d0000000-0000-4000-8000-000000000002', 'portale', 'concesso', 'data:image/png;base64,AAAA', 2) $$,
+  'padre: firma il consenso al portale');
 select is((select count(*)::int from anagrafica.pazienti), 2,
   'padre: dopo il consenso al portale vede anche Sofia');
 reset role;

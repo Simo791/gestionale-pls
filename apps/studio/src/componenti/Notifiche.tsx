@@ -77,14 +77,17 @@ export function NotificheNonLette() {
   const { nonLette, segnaLette } = useNotifiche();
   if (nonLette.length === 0) return null;
   return (
-    <section className="rounded-xl border border-teal-200 bg-teal-50 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-semibold text-teal-900">Hai {nonLette.length} {nonLette.length === 1 ? 'notifica' : 'notifiche'} da leggere</h2>
-        <Bottone onClick={() => void segnaLette(nonLette.map((n) => n.id))}>Segna come lette</Bottone>
+    <details className="group rounded-xl border border-teal-200 bg-teal-50">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-teal-700 transition group-open:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+        <span className="flex-1 font-medium text-teal-900">Hai {nonLette.length} {nonLette.length === 1 ? 'notifica' : 'notifiche'} da leggere</span>
+      </summary>
+      <div className="border-t border-teal-100 px-4 pb-3">
+        <ul className="divide-y divide-teal-100">
+          {nonLette.slice(0, 5).map((n) => <Voce key={n.id} n={n} onApri={() => void segnaLette([n.id])} />)}
+        </ul>
+        <div className="pt-2"><Bottone onClick={() => void segnaLette(nonLette.map((n) => n.id))}>Segna tutte come lette</Bottone></div>
       </div>
-      <ul className="divide-y divide-teal-100">
-        {nonLette.slice(0, 5).map((n) => <Voce key={n.id} n={n} onApri={() => void segnaLette([n.id])} />)}
-      </ul>
-    </section>
+    </details>
   );
 }

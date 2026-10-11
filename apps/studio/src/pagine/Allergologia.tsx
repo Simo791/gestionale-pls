@@ -116,7 +116,7 @@ export default function Allergologia({ claims }: { claims: ClaimsApp }) {
   );
   const promemoria = useDati(async () => (abilitato ? q<Promemoria[]>(supabase.schema('api').rpc('allergo_promemoria')) : []), [abilitato]);
 
-  if (!abilitato) return <ModuloNonAttivo admin={claims.app_admin && (claims.app_ruolo === 'pediatra' || claims.app_ruolo === 'allergologo')} />;
+  if (!abilitato) return <ModuloNonAttivo admin={claims.app_admin} />;
 
   const testo = cerca.trim().toLowerCase();
   const elenco = (pazienti.dati ?? []).filter((p) =>

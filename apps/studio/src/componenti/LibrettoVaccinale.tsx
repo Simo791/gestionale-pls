@@ -82,8 +82,10 @@ export function BadgeLivello({ livello }: { livello: LivelloDose }) {
 
 /** Libretto vaccinale: calendario nazionale, stati delle dosi, registrazione e correzione del lotto. */
 export default function LibrettoVaccinale({
-  pseudoId, dataNascita, vaccini, onCambiato, onStampaAvviso,
+  pseudoId, dataNascita, vaccini, onCambiato, onStampaAvviso, solaLettura = false,
 }: {
+  /** Consultazione senza modifiche (segreteria autorizzata). */
+  solaLettura?: boolean;
   pseudoId: string;
   dataNascita: string;
   vaccini: Vaccinazione[];
@@ -182,7 +184,7 @@ export default function LibrettoVaccinale({
                       ) : (
                         <span className="block text-xs">
                           Lotto {r.eseguita.lotto ?? '—'}{' '}
-                          <button onClick={() => setModificaLotto({ id: r.eseguita!.id, valore: r.eseguita!.lotto ?? '' })} className="text-teal-700 underline">modifica</button>
+                          {!solaLettura && <button onClick={() => setModificaLotto({ id: r.eseguita!.id, valore: r.eseguita!.lotto ?? '' })} className="text-teal-700 underline">modifica</button>}
                         </span>
                       )}
                     </>
@@ -194,7 +196,7 @@ export default function LibrettoVaccinale({
                     : <BadgeLivello livello={r.livello} />}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  {!r.eseguita && (
+                  {!r.eseguita && !solaLettura && (
                     <button onClick={() => { setAperta(aperta === r.dose.codice ? null : r.dose.codice); setData(oggiIso()); }}
                             className="text-xs text-teal-700 underline">Registra</button>
                   )}
