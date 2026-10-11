@@ -7,7 +7,7 @@ export type PseudoId = string & { readonly __brand: 'PseudoId' };
 export type ISODate = string;      // '2026-10-01'
 export type ISODateTime = string;  // '2026-10-01T09:30:00Z'
 
-export type RuoloApp = 'pediatra' | 'segreteria' | 'sostituto' | 'allergologo' | 'tutore' | 'nessuno';
+export type RuoloApp = 'pediatra' | 'segreteria' | 'sostituto' | 'allergologo' | 'auxologo' | 'tutore' | 'nessuno';
 export type Sesso = 'M' | 'F';
 
 // ---------- schema anagrafica ----------
@@ -365,12 +365,15 @@ export interface Prescrizione {
 export interface MembroStudio {
   utente_id: UUID;
   studio_id: UUID;
-  ruolo: 'pediatra' | 'segreteria' | 'sostituto' | 'allergologo';
+  ruolo: 'pediatra' | 'segreteria' | 'sostituto' | 'allergologo' | 'auxologo';
   attivo: boolean;
   amministratore: boolean;
   /** Accettato dall'amministratore nel modulo Allergologia. */
   allergologia?: boolean;
   allergologia_abilitato_il?: ISODateTime | null;
+  /** Accettato dall'amministratore nel modulo Auxologia. */
+  auxologia?: boolean;
+  auxologia_abilitato_il?: ISODateTime | null;
   nome: string | null;
   cognome: string | null;
   email: string | null;

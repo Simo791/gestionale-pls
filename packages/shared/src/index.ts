@@ -8,3 +8,5 @@ export * from './csv';
 export * from './crescita-cacciari';
 export * from './allergologia';
 export * from './molecolare';
+export * from './crescita-oms-bmi';
+export * from './auxologia';

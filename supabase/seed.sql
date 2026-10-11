@@ -23,6 +23,7 @@ from (values
   ('a0000000-0000-4000-8000-000000000003'::uuid, 'pediatra.altrostudio@example.com'),
   ('a0000000-0000-4000-8000-000000000004'::uuid, 'sostituto@example.com'),
   ('a0000000-0000-4000-8000-000000000005'::uuid, 'allergologa@example.com'),
+  ('a0000000-0000-4000-8000-000000000006'::uuid, 'auxologa@example.com'),
   ('b0000000-0000-4000-8000-000000000001'::uuid, 'mamma.bianchi@example.com'),
   ('b0000000-0000-4000-8000-000000000002'::uuid, 'papa.bianchi@example.com')
 ) as u(id, email);
@@ -240,3 +241,91 @@ update clinica.allergo_visite v set anamnesi = 'Da circa un anno tosse notturna 
   test_eseguiti = 'SPT: D. pteronyssinus 8 mm, D. farinae 7 mm, epitelio di gatto negativo, istamina 6 mm.'
 from pseudonimi.allergo_mappa m
 where m.pseudo_id = v.pseudo_id and m.paziente_id = 'e0000000-0000-4000-8000-000000000001';
+
+-- -----------------------------------------------------------------------------
+-- Modulo Auxologia (2900): attivo nello studio demo, un'auxologa abilitata e due
+-- pazienti inventati. Stature e pesi ricavati dalle curve di Cacciari (DS indicati
+-- nei commenti), così che grafici e calcoli siano coerenti.
+-- -----------------------------------------------------------------------------
+update anagrafica.studi set auxologia_attiva = true, auxologia_attivata_il = now()
+ where id = 'c0000000-0000-4000-8000-000000000001';
+insert into anagrafica.membri_studio (utente_id, studio_id, ruolo, nome, cognome, email, auxologia, auxologia_abilitato_il)
+values ('a0000000-0000-4000-8000-000000000006', 'c0000000-0000-4000-8000-000000000001', 'auxologo',
+        'Chiara', 'Celesti', 'auxologa@example.com', true, now());
+
+insert into anagrafica.auxo_pazienti (id, studio_id, nome, cognome, codice_fiscale_cifrato, codice_fiscale_impronta,
+  data_nascita, sesso, luogo_nascita, residenza, genitore_nome, genitore_telefono, pediatra_curante, inviato_da, creato_da) values
+  ('f0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'Matteo', 'Esempio',
+   anagrafica.cifra_cf('SMPMTT17A01X000A'), anagrafica.impronta_cf('SMPMTT17A01X000A'), current_date - interval '9 years',
+   'M', 'Città Demo', 'Città Demo, via degli Esempi 5', 'Anna Esempio', '0000 444444', 'Dott. Esempio',
+   'Pediatra di libera scelta', 'a0000000-0000-4000-8000-000000000006'),
+  ('f0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001', 'Sofia', 'Campione',
+   anagrafica.cifra_cf('CMPSFO19A41X000B'), anagrafica.impronta_cf('CMPSFO19A41X000B'), current_date - interval '7 years 5 months',
+   'F', 'Città Demo', 'Città Demo, piazza di Prova 2', 'Luca Campione', '0000 555555', 'Dott.ssa Esempio',
+   'Pediatra di libera scelta', 'a0000000-0000-4000-8000-000000000006');
+
+do $$
+declare
+  m uuid := (select pseudo_id from pseudonimi.auxo_mappa where paziente_id = 'f0000000-0000-4000-8000-000000000001');
+  s uuid := (select pseudo_id from pseudonimi.auxo_mappa where paziente_id = 'f0000000-0000-4000-8000-000000000002');
+  v uuid;
+begin
+  -- Matteo: bassa statura con DS in calo (−2,0 → −2,55) e velocità ridotta; target 168 cm.
+  update clinica.auxo_cartelle set altezza_padre_cm = 168, altezza_madre_cm = 155, altezze_genitori_misurate = true,
+    eta_menarca_madre = 12.5, puberta_padre = 'nella_norma', eta_gestazionale_sett = 39, peso_nascita_g = 3150,
+    lunghezza_nascita_cm = 49.5, anamnesi_familiare = 'Nessuna familiarità per bassa statura patologica o ritardo puberale.',
+    anamnesi_fisiologica = 'Nato a termine da gravidanza normodecorsa, parto spontaneo.',
+    anamnesi_remota = 'Nessuna patologia cronica nota.', lesioni_ipotalamo_ipofisarie = false
+  where pseudo_id = m;
+  insert into clinica.auxo_visite (pseudo_id, medico_id, data, tipo, motivo, anamnesi, esame_obiettivo, conclusioni, piano, prossimo_controllo)
+  values (m, 'a0000000-0000-4000-8000-000000000006', now() - interval '12 months', 'prima_visita', 'Bassa statura',
+          'Inviato dal pediatra per statura sotto il 3° percentile con progressivo distacco dalla curva.',
+          'Condizioni generali buone. Proporzioni corporee armoniche. Non dismorfismi. Prepubere (G1 PH1, testicoli 2 ml).',
+          'Bassa statura con velocità di crescita ridotta: indicati accertamenti.',
+          '- Esami di primo livello e IGF-1.
+- Radiografia della mano e del polso sinistri per l''età ossea.', current_date - 10)
+  returning id into v;
+  insert into clinica.auxo_misure (pseudo_id, visita_id, data, altezza_cm, peso_kg, strumento) values
+    (m, null, current_date - interval '3 years', 106.2, 19.0, 'Pediatra curante'),   -- 6 anni: −2,00 DS
+    (m, null, current_date - interval '2 years', 110.8, 20.7, 'Pediatra curante'),   -- 7 anni: −2,15 DS
+    (m, v, (current_date - interval '1 year')::date, 114.7, 22.6, 'Stadiometro di Harpenden'), -- 8 anni: −2,35 DS
+    (m, null, current_date - 7, 118.3, 24.6, 'Stadiometro di Harpenden');             -- 9 anni: ≈ −2,55 DS
+  insert into clinica.auxo_puberta (pseudo_id, visita_id, data, tanner_g, tanner_ph, testicolo_dx_ml, testicolo_sx_ml)
+  values (m, v, (current_date - interval '1 year')::date, 1, 1, 2, 2);
+  insert into clinica.auxo_eta_ossea (pseudo_id, data, metodo, eta_ossea_anni, refertata_da)
+  values (m, (current_date - interval '11 months')::date, 'greulich_pyle', 6.5, 'Radiologia Demo');
+  insert into clinica.auxo_esami (pseudo_id, data, esame, valore, unita, sds, laboratorio) values
+    (m, (current_date - interval '11 months')::date, 'igf1', 62, 'ng/mL', -2.1, 'Laboratorio Demo');
+  insert into clinica.auxo_esami (pseudo_id, data, esame, valore, unita, rif_min, rif_max, laboratorio) values
+    (m, (current_date - interval '11 months')::date, 'tsh', 2.1, 'mUI/L', 0.5, 4.5, 'Laboratorio Demo');
+  insert into clinica.auxo_esami (pseudo_id, data, esame, valore_testo, laboratorio) values
+    (m, (current_date - interval '11 months')::date, 'ttg_iga', 'Negativi (IgA totali nella norma)', 'Laboratorio Demo');
+  insert into clinica.auxo_test_gh (pseudo_id, data, stimolo, picco_ug_l) values
+    (m, current_date - 60, 'arginina', 6.2),
+    (m, current_date - 45, 'clonidina', 9.5);
+  insert into clinica.auxo_diagnosi (pseudo_id, area, descrizione, stato)
+  values (m, 'ghd', 'Sospetto deficit di GH (in corso di accertamento)', 'sospetta');
+
+  -- Sofia: telarca a 7 anni e 2 mesi con accelerazione staturale ed età ossea avanzata; target 164 cm.
+  update clinica.auxo_cartelle set altezza_padre_cm = 178, altezza_madre_cm = 163, altezze_genitori_misurate = false,
+    eta_menarca_madre = 11.0, eta_gestazionale_sett = 40, peso_nascita_g = 3400, lunghezza_nascita_cm = 50.5,
+    anamnesi_familiare = 'Madre: menarca a 11 anni.'
+  where pseudo_id = s;
+  insert into clinica.auxo_visite (pseudo_id, medico_id, data, tipo, motivo, esame_obiettivo, conclusioni, piano, prossimo_controllo)
+  values (s, 'a0000000-0000-4000-8000-000000000006', now() - interval '20 days', 'prima_visita', 'Comparsa del bottone mammario',
+          'Condizioni generali buone. Bottone mammario bilaterale (B2), PH1.',
+          'Telarca prima degli 8 anni con accelerazione della velocità di crescita: indicati accertamenti per pubertà precoce.',
+          '- LH, FSH ed estradiolo basali; età ossea; ecografia pelvica.', current_date + 20)
+  returning id into v;
+  insert into clinica.auxo_misure (pseudo_id, visita_id, data, altezza_cm, peso_kg) values
+    (s, null, current_date - interval '2 years', 115.5, 22.1),    -- 5,4 anni: +0,60 DS
+    (s, null, current_date - interval '1 year', 123.3, 26.3),     -- 6,4 anni: +0,85 DS
+    (s, v, current_date - 20, 131.6, 32.1);                       -- 7,4 anni: ≈ +1,30 DS
+  insert into clinica.auxo_puberta (pseudo_id, visita_id, data, tanner_b, tanner_ph, menarca)
+  values (s, v, current_date - 20, 2, 1, false);
+  insert into clinica.auxo_eta_ossea (pseudo_id, data, metodo, eta_ossea_anni, refertata_da)
+  values (s, current_date - 15, 'greulich_pyle', 9.0, 'Radiologia Demo');
+  insert into clinica.auxo_diagnosi (pseudo_id, area, descrizione, stato)
+  values (s, 'puberta_precoce', 'Telarca precoce con accelerazione staturale: sospetta pubertà precoce centrale', 'sospetta');
+end;
+$$;

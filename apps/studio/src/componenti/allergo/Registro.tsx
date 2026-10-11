@@ -18,6 +18,9 @@ export interface Campo {
   passo?: string;
   aiuto?: string;
   segnaposto?: string;
+  /** Limiti per numeri e date (come i controlli del database). */
+  min?: string;
+  max?: string;
 }
 
 export type Valori = Record<string, string | boolean>;
@@ -82,7 +85,7 @@ export function CampoModulo({ c, v, onChange }: { c: Campo; v: Valori; onChange:
       ) : (
         <input
           type={c.tipo === 'numero' ? 'number' : c.tipo === 'data' ? 'date' : c.tipo === 'dataora' ? 'datetime-local' : 'text'}
-          step={c.tipo === 'numero' ? (c.passo ?? 'any') : undefined}
+          step={c.tipo === 'numero' ? (c.passo ?? 'any') : undefined} min={c.min} max={c.max}
           required={c.obbligatorio} value={testo} placeholder={c.segnaposto}
           onChange={(e) => imposta(e.target.value)} className={stileInput}
         />

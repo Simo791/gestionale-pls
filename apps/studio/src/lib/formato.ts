@@ -77,6 +77,11 @@ const AZIONI: Record<string, string> = {
   ATTIVAZIONE_ALLERGOLOGIA: 'Attivazione modulo Allergologia',
   DISATTIVAZIONE_ALLERGOLOGIA: 'Disattivazione modulo Allergologia',
   APERTURA_CARTELLA_ALLERGO: 'Apertura cartella allergologica',
+  ATTIVAZIONE_AUXOLOGIA: 'Attivazione modulo Auxologia',
+  DISATTIVAZIONE_AUXOLOGIA: 'Disattivazione modulo Auxologia',
+  ABILITAZIONE_AUXOLOGIA: 'Abilitazione al modulo Auxologia',
+  REVOCA_AUXOLOGIA: 'Revoca dal modulo Auxologia',
+  APERTURA_CARTELLA_AUXO: 'Apertura cartella auxologica',
   APERTURA_CARTELLA_LETTURA: 'Apertura cartella (segreteria, sola lettura)',
   FIRMA_CONSENSO: 'Firma di un consenso sul portale (dismesso)',
   CONSULTAZIONE_PORTALE: 'Consultazione dal portale genitori (dismesso)',
@@ -125,6 +130,18 @@ const TABELLE: Record<string, string> = {
   'clinica.allergo_test': 'Test allergologico',
   'clinica.allergo_punteggi': 'Punteggio (SCORAD, ACT…)',
   'clinica.allergo_spirometrie': 'Spirometria',
+  'anagrafica.auxo_pazienti': 'Anagrafica paziente auxologico',
+  'anagrafica.auxo_modelli': 'Modelli auxologia',
+  'anagrafica.auxo_impostazioni': 'Impostazioni referto auxologia',
+  'clinica.auxo_cartelle': 'Cartella auxologica',
+  'clinica.auxo_visite': 'Visita auxologica',
+  'clinica.auxo_misure': 'Misure auxologiche',
+  'clinica.auxo_puberta': 'Stadio puberale',
+  'clinica.auxo_eta_ossea': 'Età ossea',
+  'clinica.auxo_esami': 'Esame (auxologia)',
+  'clinica.auxo_test_gh': 'Test di stimolo del GH',
+  'clinica.auxo_diagnosi': 'Diagnosi auxologica',
+  'clinica.auxo_terapie': 'Terapia (auxologia)',
 };
 
 export const ETICHETTA_TIPO_VISITA: Record<TipoVisita, string> = {
@@ -145,4 +162,4 @@ export const PRIORITA: Record<PrioritaPrescrizione, string> = {
 export const etichettaTabella = (t: string | null) => (t ? (TABELLE[t] ?? t) : '—');
 
 export const etichettaRuolo = (r: string) =>
-  ({ pediatra: 'Pediatra', segreteria: 'Segreteria', sostituto: 'Sostituto', allergologo: 'Allergologo pediatra', tutore: 'Genitore', nessuno: 'Sistema' })[r] ?? r;
+  ({ pediatra: 'Pediatra', segreteria: 'Segreteria', sostituto: 'Sostituto', allergologo: 'Allergologo pediatra', auxologo: 'Auxologo pediatra', tutore: 'Genitore', nessuno: 'Sistema' })[r] ?? r;

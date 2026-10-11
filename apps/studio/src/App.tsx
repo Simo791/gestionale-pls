@@ -2,7 +2,7 @@ import { richiedeMfa, usaAppStudio, type ClaimsApp } from '@pls/shared';
 import { useEffect, useState } from 'react';
 import Layout from './componenti/Layout';
 import { q, useDati } from './lib/dati';
-import { useRotta } from './lib/rotta';
+import { sezioneSpecialista, useRotta } from './lib/rotta';
 import { esci, useSessione } from './lib/sessione';
 import { supabase } from './lib/supabase';
 import Accesso from './pagine/Accesso';
@@ -11,11 +11,13 @@ import Agenda from './pagine/Agenda';
 import Amministrazione from './pagine/Amministrazione';
 import Allergologia from './pagine/Allergologia';
 import Assistiti from './pagine/Assistiti';
+import Auxologia from './pagine/Auxologia';
 import Consensi from './pagine/Consensi';
 import Cruscotto from './pagine/Cruscotto';
 import Patologie from './pagine/Patologie';
 import Registro from './pagine/Registro';
 import SchedaAllergologica from './pagine/SchedaAllergologica';
+import SchedaAuxologica from './pagine/SchedaAuxologica';
 import RitiroDocumenti from './pagine/RitiroDocumenti';
 import SchedaPaziente from './pagine/SchedaPaziente';
 import SecondoFattore from './pagine/SecondoFattore';
@@ -59,8 +61,9 @@ function Applicazione({ claims }: { claims: ClaimsApp }) {
     [],
   );
 
-  // L'allergologo (non amministratore) vede solo il modulo Allergologia e il proprio account.
-  const sezione = claims.app_ruolo === 'allergologo' && !claims.app_admin && rotta.sezione !== 'account' ? 'allergologia' : rotta.sezione;
+  // Lo specialista (non amministratore) vede solo il proprio modulo e il proprio account.
+  const modulo = sezioneSpecialista(claims);
+  const sezione = modulo && rotta.sezione !== 'account' ? modulo : rotta.sezione;
 
   let pagina;
   switch (sezione) {
@@ -68,6 +71,11 @@ function Applicazione({ claims }: { claims: ClaimsApp }) {
       pagina = rotta.sezione === 'allergologia' && rotta.id && claims.app_allergologia
         ? <SchedaAllergologica key={rotta.id} id={rotta.id} claims={claims} />
         : <Allergologia claims={claims} />;
+      break;
+    case 'auxologia':
+      pagina = rotta.sezione === 'auxologia' && rotta.id && claims.app_auxologia
+        ? <SchedaAuxologica key={rotta.id} id={rotta.id} claims={claims} />
+        : <Auxologia claims={claims} />;
       break;
     case 'agenda':
       pagina = <Agenda claims={claims} />;

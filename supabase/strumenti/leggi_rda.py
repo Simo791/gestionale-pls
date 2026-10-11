@@ -1,12 +1,15 @@
 import struct, sys, json, bz2
 d = bz2.decompress(open(sys.argv[1],'rb').read())
-assert d[:5] == b'RDX2\n' and d[5:7] == b'X\n'
+assert d[:3] == b'RDX' and d[5:7] == b'X\n'
+V3 = d[3:4] == b'3'
 p = 7
 def i32():
     global p; v = struct.unpack('>i', d[p:p+4])[0]; p += 4; return v
 def f64():
     global p; v = struct.unpack('>d', d[p:p+8])[0]; p += 8; return v
 i32(); i32(); i32()  # versions
+if V3:
+    n = struct.unpack('>i', d[p:p+4])[0]; p += 4 + n
 refs = []
 def item():
     global p

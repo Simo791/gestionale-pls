@@ -1,5 +1,5 @@
 import type { ClaimsApp, MembroStudio } from '@pls/shared';
-import GestioneAllergologia from '../componenti/allergo/GestioneAllergologia';
+import GestioneModulo, { MODULO_ALLERGOLOGIA, MODULO_AUXOLOGIA } from '../componenti/GestioneModulo';
 import GestioneStaff from '../componenti/GestioneStaff';
 import ImportaCatalogo from '../componenti/ImportaCatalogo';
 import Integrazioni from '../componenti/Integrazioni';
@@ -25,10 +25,11 @@ type IdSezione = (typeof SEZIONI)[number]['id'];
 /**
  * Specializzazioni: ogni modulo ha la propria anagrafica separata o le proprie tabelle cliniche,
  * un ruolo dedicato (o l'abilitazione di un medico dello studio) e una funzione di controllo
- * nel database. Allergologia è il primo; gli altri sono il percorso previsto.
+ * nel database. Allergologia e Auxologia sono attivi; gli altri sono il percorso previsto.
  */
 const MODULI = [
   { codice: 'allergologia', nome: 'Allergologia pediatrica', stato: 'attivo' as const, ruolo: 'Pediatra allergologo' },
+  { codice: 'auxologia', nome: 'Auxologia ed endocrinologia pediatrica', stato: 'attivo' as const, ruolo: 'Pediatra auxologo' },
   { codice: 'dermatologia', nome: 'Dermatologia pediatrica', stato: 'previsto' as const, ruolo: 'Dermatologo' },
   { codice: 'cardiologia', nome: 'Cardiologia pediatrica', stato: 'previsto' as const, ruolo: 'Cardiologo pediatra' },
   { codice: 'neuropsichiatria', nome: 'Neuropsichiatria infantile', stato: 'previsto' as const, ruolo: 'Neuropsichiatra infantile' },
@@ -36,10 +37,11 @@ const MODULI = [
 ];
 
 const FIGURE = [
-  { nome: 'Amministratore', testo: 'Può fare tutto: visite, referti, inserimenti, gestione di staff, moduli, genitori e integrazioni. Si assegna a pediatri, sostituti o allergologi, mai alla segreteria.' },
-  { nome: 'Pediatra di libera scelta', testo: 'I propri assistiti e tutta la cartella. Allergologia solo se abilitato (ad esempio per mostrare il gestionale completo).' },
+  { nome: 'Amministratore', testo: 'Può fare tutto: visite, referti, inserimenti, gestione di staff, moduli, genitori e integrazioni. Si assegna a pediatri, sostituti o specialisti, mai alla segreteria.' },
+  { nome: 'Pediatra di libera scelta', testo: 'I propri assistiti e tutta la cartella. Allergologia e Auxologia solo se abilitato (ad esempio per mostrare il gestionale completo).' },
   { nome: 'Pediatra sostituto', testo: 'Le cartelle del titolare solo nei periodi di sostituzione attivati dal titolare.' },
   { nome: 'Pediatra allergologo', testo: 'Solo il modulo Allergologia, con anagrafica pazienti separata.' },
+  { nome: 'Pediatra auxologo', testo: 'Solo il modulo Auxologia (crescita, pubertà, ormone della crescita), con anagrafica pazienti separata.' },
   { nome: 'Segreteria', testo: 'Agenda, anagrafiche, accompagnatori e consensi. Le cartelle cliniche solo in lettura e solo se un pediatra (o l’amministratore) lo consente.' },
   { nome: 'Genitori', testo: 'Nessun accesso al gestionale: ricevono i documenti delle visite via email o WhatsApp, con un link personale protetto dalla data di nascita del bambino.' },
 ];
@@ -80,7 +82,8 @@ export default function Amministrazione({ claims, sezione }: { claims: ClaimsApp
       )}
       {attiva === 'moduli' && (
         <>
-          <GestioneAllergologia claims={claims} />
+          <GestioneModulo claims={claims} modulo={MODULO_ALLERGOLOGIA} />
+          <GestioneModulo claims={claims} modulo={MODULO_AUXOLOGIA} />
           <Pannello titolo="Altre specializzazioni" sottotitolo="Il gestionale è predisposto per più professionisti: ogni modulo ha accessi, dati e registro propri">
             <ul className="divide-y divide-slate-100 text-sm">
               {MODULI.map((m) => (
@@ -91,7 +94,7 @@ export default function Amministrazione({ claims, sezione }: { claims: ClaimsApp
               ))}
             </ul>
             <p className="mt-2 text-xs text-slate-500">
-              Per aggiungere una specializzazione si replica lo schema di Allergologia: ruolo dedicato, abilitazione dei medici dello studio,
+              Per aggiungere una specializzazione si replica lo schema di Allergologia e Auxologia: ruolo dedicato, abilitazione dei medici dello studio,
               tabelle cliniche pseudonimizzate, funzione di accesso nel database e voce di menu.
             </p>
           </Pannello>
@@ -119,7 +122,7 @@ function Panoramica() {
       q<MembroStudio[]>(ana.from('membri_studio').select('*')),
       q<{ id: string; stato: string; ritiri: number }[]>(ana.from('invii_documenti').select('id, stato, ritiri').gte('creato_il', new Date(Date.now() - 30 * 86_400_000).toISOString())),
       q<{ tipo: string; stato: string }[]>(ana.from('integrazioni').select('tipo, stato')),
-      q<{ allergologia_attiva: boolean }>(ana.from('studi').select('allergologia_attiva').single()),
+      q<{ allergologia_attiva: boolean; auxologia_attiva: boolean }>(ana.from('studi').select('allergologia_attiva, auxologia_attiva').single()),
       ana.from('catalogo_prestazioni').select('id', { count: 'exact', head: true }).eq('attivo', true),
     ]);
     if (catalogo.error) throw new Error(catalogo.error.message);
@@ -145,6 +148,7 @@ function Panoramica() {
       <Pannello titolo="Stato dei servizi">
         <ul className="divide-y divide-slate-100 text-sm">
           <li className="flex items-center justify-between py-2"><span>Modulo Allergologia</span>{d?.studio.allergologia_attiva ? <Badge tono="ok">Attivo</Badge> : <Badge>Non attivo</Badge>}</li>
+          <li className="flex items-center justify-between py-2"><span>Modulo Auxologia</span>{d?.studio.auxologia_attiva ? <Badge tono="ok">Attivo</Badge> : <Badge>Non attivo</Badge>}</li>
           <li className="flex items-center justify-between py-2"><span>Email (invio documenti)</span><Badge tono={statoInt('email') === 'attiva' ? 'ok' : 'neutro'}>{statoInt('email').replace('_', ' ')}</Badge></li>
           <li className="flex items-center justify-between py-2"><span>WhatsApp (promemoria e documenti)</span><Badge tono={statoInt('whatsapp') === 'attiva' ? 'ok' : 'neutro'}>{statoInt('whatsapp').replace('_', ' ')}</Badge></li>
           <li className="flex items-center justify-between py-2"><span>Google Calendar</span><Badge tono={statoInt('google_calendar') === 'attiva' ? 'ok' : 'neutro'}>{statoInt('google_calendar').replace('_', ' ')}</Badge></li>

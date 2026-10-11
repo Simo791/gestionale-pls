@@ -13,13 +13,13 @@ di minori (GDPR art. 9) fin dal primo commit.
 | --- | --- |
 | Database | 4 schemi separati: `anagrafica`, `clinica`, `pseudonimi`, `audit` |
 | Pseudonimizzazione | La parte clinica usa solo `pseudo_id`; la mappa la leggono solo funzioni controllate |
-| Permessi | Row Level Security su ogni tabella; dati clinici al pediatra titolare e al sostituto in servizio, con MFA; modulo Allergologia solo ad allergologi accettati e amministratori pediatri/allergologi |
+| Permessi | Row Level Security su ogni tabella; dati clinici al pediatra titolare e al sostituto in servizio, con MFA; moduli Allergologia e Auxologia solo agli specialisti accettati e agli amministratori |
 | Consensi | Uno per genitore e per finalità, storico non modificabile, stato completo/parziale/assente |
 | Audit | Registro in sola aggiunta con catena di hash SHA-256 e funzione di verifica |
 | Accesso | Login con codice via email (OTP) + secondo fattore TOTP per lo staff |
-| App | `apps/studio` (pediatra, segreteria, sostituto, allergologo), React + Vite + Tailwind. Niente portale genitori: i documenti delle visite si inviano via email o WhatsApp con link personale protetto |
-| Moduli | Agenda, cartella, visite e prescrizioni, curve di crescita, vaccini, patologie, certificati, staff e sostituzioni, WhatsApp, Allergologia |
-| Test | Test pgTAP su RLS, audit, Auth Hook, staff, allergologia e correzioni di sicurezza (`supabase/tests/database`); test Vitest sulla logica condivisa |
+| App | `apps/studio` (pediatra, segreteria, sostituto, allergologo, auxologo), React + Vite + Tailwind. Niente portale genitori: i documenti delle visite si inviano via email o WhatsApp con link personale protetto |
+| Moduli | Agenda, cartella, visite e prescrizioni, curve di crescita, vaccini, patologie, certificati, staff e sostituzioni, WhatsApp, Allergologia, Auxologia (crescita, pubertà, ormone della crescita) |
+| Test | Test pgTAP su RLS, audit, Auth Hook, staff, allergologia, auxologia e correzioni di sicurezza (`supabase/tests/database`); test Vitest sulla logica condivisa |
 
 ## Struttura
 

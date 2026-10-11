@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { Badge, Bottone, Caricamento, Errore, Vuoto, type Tono } from './ui';
 
 interface Invio {
-  id: string; paziente_id: string | null; allergo_paziente_id: string | null; canale: 'email' | 'whatsapp';
+  id: string; paziente_id: string | null; allergo_paziente_id: string | null; auxo_paziente_id: string | null; canale: 'email' | 'whatsapp';
   destinatario: string; destinatario_nome: string | null; descrizione: string; documenti: { nome: string }[];
   scade_il: string; stato: 'preparato' | 'pronto' | 'inviato' | 'consegnato_manualmente' | 'errore' | 'revocato';
   errore: string | null; ritiri: number; ultimo_ritiro_il: string | null; tentativi: number; creato_il: string;
@@ -26,15 +26,17 @@ export default function RegistroInvii() {
   const elenco = useDati(async () => {
     const ana = supabase.schema('anagrafica');
     const invii = await q<Invio[]>(ana.from('invii_documenti')
-      .select('id, paziente_id, allergo_paziente_id, canale, destinatario, destinatario_nome, descrizione, documenti, scade_il, stato, errore, ritiri, ultimo_ritiro_il, tentativi, creato_il')
+      .select('id, paziente_id, allergo_paziente_id, auxo_paziente_id, canale, destinatario, destinatario_nome, descrizione, documenti, scade_il, stato, errore, ritiri, ultimo_ritiro_il, tentativi, creato_il')
       .order('creato_il', { ascending: false }).limit(200));
     const ped = [...new Set(invii.map((i) => i.paziente_id).filter(Boolean))] as string[];
     const all = [...new Set(invii.map((i) => i.allergo_paziente_id).filter(Boolean))] as string[];
-    const [p1, p2] = await Promise.all([
+    const aux = [...new Set(invii.map((i) => i.auxo_paziente_id).filter(Boolean))] as string[];
+    const [p1, p2, p3] = await Promise.all([
       ped.length ? q<{ id: string; nome: string; cognome: string }[]>(ana.from('pazienti').select('id, nome, cognome').in('id', ped)) : [],
       all.length ? q<{ id: string; nome: string; cognome: string }[]>(ana.from('allergo_pazienti').select('id, nome, cognome').in('id', all)) : [],
+      aux.length ? q<{ id: string; nome: string; cognome: string }[]>(ana.from('auxo_pazienti').select('id, nome, cognome').in('id', aux)) : [],
     ]);
-    const nomi = new Map([...p1, ...p2].map((x) => [x.id, `${x.cognome} ${x.nome}`]));
+    const nomi = new Map([...p1, ...p2, ...p3].map((x) => [x.id, `${x.cognome} ${x.nome}`]));
     return { invii, nomi };
   }, []);
   const [errore, setErrore] = useState<string | null>(null);
@@ -64,7 +66,9 @@ export default function RegistroInvii() {
                 <p className="font-medium text-slate-900">
                   {i.paziente_id
                     ? <a href={link('assistiti', i.paziente_id)} className="hover:underline">{nomi.get(i.paziente_id) ?? '—'}</a>
-                    : <a href={link('allergologia', i.allergo_paziente_id!)} className="hover:underline">{nomi.get(i.allergo_paziente_id!) ?? '—'} <span className="text-xs text-slate-500">(Allergologia)</span></a>}
+                    : i.allergo_paziente_id
+                      ? <a href={link('allergologia', i.allergo_paziente_id)} className="hover:underline">{nomi.get(i.allergo_paziente_id) ?? '—'} <span className="text-xs text-slate-500">(Allergologia)</span></a>
+                      : <a href={link('auxologia', i.auxo_paziente_id!)} className="hover:underline">{nomi.get(i.auxo_paziente_id!) ?? '—'} <span className="text-xs text-slate-500">(Auxologia)</span></a>}
                   <span className="ml-2 font-normal text-slate-500">{i.descrizione}</span>
                 </p>
                 <p className="text-xs text-slate-500">

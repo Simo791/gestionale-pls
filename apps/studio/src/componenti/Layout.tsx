@@ -1,7 +1,7 @@
 import type { ClaimsApp } from '@pls/shared';
 import { useState, type ReactNode } from 'react';
 import { etichettaRuolo } from '../lib/formato';
-import { link, type Rotta, type Sezione } from '../lib/rotta';
+import { link, sezioneSpecialista, type Rotta, type Sezione } from '../lib/rotta';
 import { esci } from '../lib/sessione';
 import { Campanella } from './Notifiche';
 
@@ -14,6 +14,8 @@ interface Voce {
   soloAdmin?: boolean;
   /** Per chi è abilitato al modulo Allergologia e sempre per l'amministratore (che lo attiva da lì). */
   allergologia?: boolean;
+  /** Per chi è abilitato al modulo Auxologia e sempre per l'amministratore. */
+  auxologia?: boolean;
 }
 
 const VOCI: Voce[] = [
@@ -21,6 +23,7 @@ const VOCI: Voce[] = [
   { sezione: 'agenda', etichetta: 'Agenda', icona: 'M7 3v3M17 3v3M4 8h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z' },
   { sezione: 'assistiti', etichetta: 'Assistiti', icona: 'M16 19v-1a4 4 0 00-4-4H8a4 4 0 00-4 4v1M10 10a3 3 0 100-6 3 3 0 000 6M20 19v-1a4 4 0 00-3-3.9M15 4.1a3 3 0 010 5.8' },
   { sezione: 'allergologia', etichetta: 'Allergologia', icona: 'M12 3v4M12 17v4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M3 12h4M17 12h4M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8M12 9a3 3 0 100 6 3 3 0 000-6', allergologia: true },
+  { sezione: 'auxologia', etichetta: 'Auxologia', icona: 'M4 20h16M7 20V10M12 20V6M17 20v-7M6 8l6-4 6 4', auxologia: true },
   { sezione: 'consensi', etichetta: 'Consensi', icona: 'M9 12l2 2 4-4M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z' },
   { sezione: 'registro', etichetta: 'Registro accessi', icona: 'M9 5h10M9 12h10M9 19h10M5 5h.01M5 12h.01M5 19h.01', soloPediatra: true },
   { sezione: 'patologie', etichetta: 'Patologie', icona: 'M4 5a2 2 0 012-2h12v16H6a2 2 0 00-2 2V5zM4 19a2 2 0 012-2h12M9 7h6M12 4v6' },
@@ -48,18 +51,20 @@ export default function Layout({
   children: ReactNode;
 }) {
   const [menuAperto, setMenuAperto] = useState(false);
-  // L'allergologo (non amministratore) usa solo il suo modulo; l'amministratore vede tutto;
-  // gli altri vedono Allergologia solo se abilitati.
-  const voci = claims.app_ruolo === 'allergologo' && !claims.app_admin
-    ? VOCI.filter((v) => v.sezione === 'allergologia' || v.sezione === 'account')
+  // Lo specialista (non amministratore) usa solo il suo modulo; l'amministratore vede tutto;
+  // gli altri vedono i moduli specialistici solo se abilitati.
+  const modulo = sezioneSpecialista(claims);
+  const voci = modulo
+    ? VOCI.filter((v) => v.sezione === modulo || v.sezione === 'account')
     : VOCI.filter((v) => (!v.soloPediatra || claims.app_ruolo === 'pediatra' || claims.app_admin)
         && (!v.soloAdmin || claims.app_admin)
-        && (!v.allergologia || claims.app_allergologia || claims.app_admin));
+        && (!v.allergologia || claims.app_allergologia || claims.app_admin)
+        && (!v.auxologia || claims.app_auxologia || claims.app_admin));
 
   const menu = (
     <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Menu principale">
       {voci.map((v) => {
-        const attiva = rotta.sezione === v.sezione;
+        const attiva = (modulo && rotta.sezione !== 'account' ? modulo : rotta.sezione) === v.sezione;
         return (
           <a
             key={v.sezione}

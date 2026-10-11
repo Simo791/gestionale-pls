@@ -1,9 +1,9 @@
 // Edge Function: l'amministratore dello studio aggiunge un membro dello staff
-// (segreteria, sostituto o allergologo pediatra per il solo modulo Allergologia). Serve la service role per creare l'utente in Auth,
+// (segreteria, sostituto, allergologo o auxologo pediatra per il solo modulo specialistico). Serve la service role per creare l'utente in Auth,
 // quindi l'operazione non può stare nel frontend.
 //
 // Sicurezza: la richiesta deve arrivare con il JWT dell'utente (verify_jwt attivo);
-// la funzione rilegge il token e accetta solo chi ha app_admin = true (pediatra, sostituto o allergologo: la segreteria non può essere amministratore).
+// la funzione rilegge il token e accetta solo chi ha app_admin = true (pediatra, sostituto, allergologo o auxologo: la segreteria non può essere amministratore).
 // Il nuovo utente accede poi con il codice via email e configura il secondo fattore.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
   const { data: chi, error: errUtente } = await admin.auth.getUser(jwt);
   const claims = leggiClaims(jwt);
   if (errUtente || !chi.user || !claims) return risposta({ errore: 'Non autenticato' }, 401);
-  if (claims.app_admin !== true || !claims.app_studio_id || !['pediatra', 'sostituto', 'allergologo'].includes(String(claims.app_ruolo))) {
+  if (claims.app_admin !== true || !claims.app_studio_id || !['pediatra', 'sostituto', 'allergologo', 'auxologo'].includes(String(claims.app_ruolo))) {
     return risposta({ errore: 'Solo l\'amministratore dello studio può aggiungere membri' }, 403);
   }
   if (claims.aal !== 'aal2') return risposta({ errore: 'Serve il secondo fattore di autenticazione' }, 403);
@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
   const { email, nome, cognome, ruolo } = await req.json().catch(() => ({}));
   const em = String(email ?? '').trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return risposta({ errore: 'Email non valida' }, 400);
-  if (!['segreteria', 'sostituto', 'allergologo'].includes(ruolo)) return risposta({ errore: 'Ruolo non valido' }, 400);
+  if (!['segreteria', 'sostituto', 'allergologo', 'auxologo'].includes(ruolo)) return risposta({ errore: 'Ruolo non valido' }, 400);
   if (!String(nome ?? '').trim() || !String(cognome ?? '').trim()) return risposta({ errore: 'Nome e cognome obbligatori' }, 400);
 
   // Crea l'utente (email già confermata: l'accesso avviene comunque solo con il codice inviato a quella casella).
@@ -86,6 +86,10 @@ Deno.serve(async (req) => {
     // Aggiungere un allergologo equivale ad accettarlo nel modulo Allergologia.
     ...(ruolo === 'allergologo'
       ? { allergologia: true, allergologia_abilitato_il: new Date().toISOString(), allergologia_abilitato_da: chi.user.id }
+      : {}),
+    // Allo stesso modo un auxologo è accettato nel modulo Auxologia.
+    ...(ruolo === 'auxologo'
+      ? { auxologia: true, auxologia_abilitato_il: new Date().toISOString(), auxologia_abilitato_da: chi.user.id }
       : {}),
   });
   if (error) return risposta({ errore: error.message }, 400);

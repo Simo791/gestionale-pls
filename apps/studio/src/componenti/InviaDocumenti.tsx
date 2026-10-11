@@ -43,11 +43,12 @@ function testoMessaggio(nomeStudio: string, link: string, scade: string) {
  * Se le credenziali di email/WhatsApp non sono configurate, si apre l'email o WhatsApp
  * dello studio con il messaggio già pronto.
  */
-export default function InviaDocumenti({ documenti, destinatari, pazienteId, allergoPazienteId, studioId, nomeStudio, descrizione, onChiudi }: {
+export default function InviaDocumenti({ documenti, destinatari, pazienteId, allergoPazienteId, auxoPazienteId, studioId, nomeStudio, descrizione, onChiudi }: {
   documenti: DocumentoInviabile[];
   destinatari: Destinatario[];
   pazienteId?: string;
   allergoPazienteId?: string;
+  auxoPazienteId?: string;
   studioId: string;
   nomeStudio?: string;
   descrizione: string;
@@ -77,6 +78,7 @@ export default function InviaDocumenti({ documenti, destinatari, pazienteId, all
       const { data, error } = await supabase.schema('api').rpc('prepara_invio', {
         p_paziente_id: pazienteId ?? null, p_allergo_paziente_id: allergoPazienteId ?? null, p_tutore_id: scelto?.tutoreId ?? null,
         p_canale: canale, p_destinatario: recapito, p_destinatario_nome: scelto?.nome ?? nuovo.nome, p_descrizione: descrizione, p_conferma: true,
+        ...(auxoPazienteId ? { p_auxo_paziente_id: auxoPazienteId } : {}),
       });
       if (error) throw new Error(error.message);
       const { id, token, scade_il } = (data as { id: string; token: string; scade_il: string }[])[0]!;

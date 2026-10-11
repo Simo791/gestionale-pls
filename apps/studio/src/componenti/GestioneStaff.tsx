@@ -21,7 +21,7 @@ export default function GestioneStaff({ claims, parte = 'tutto' }: { claims: Cla
       .gte('al', oggiIso()).is('revocata_il', null).order('dal')),
     [],
   );
-  const [nuovo, setNuovo] = useState({ nome: '', cognome: '', email: '', ruolo: 'segreteria' as 'segreteria' | 'sostituto' | 'allergologo' });
+  const [nuovo, setNuovo] = useState({ nome: '', cognome: '', email: '', ruolo: 'segreteria' as 'segreteria' | 'sostituto' | 'allergologo' | 'auxologo' });
   const [turno, setTurno] = useState({ sostituto: '', dal: oggiIso(), al: oggiIso(), consegne: '' });
   const [esito, setEsito] = useState<{ ok: boolean; testo: string } | null>(null);
   const [invio, setInvio] = useState(false);
@@ -49,7 +49,7 @@ export default function GestioneStaff({ claims, parte = 'tutto' }: { claims: Cla
 
   async function tuttiAmministratori() {
     setEsito(null);
-    if (!window.confirm('Tutti i pediatri, sostituti e allergologi attivi diventeranno amministratori, con accesso a tutte le cartelle cliniche. Continuare?')) return;
+    if (!window.confirm('Tutti i pediatri, sostituti e specialisti attivi diventeranno amministratori, con accesso a tutte le cartelle cliniche. Continuare?')) return;
     const { data, error } = await supabase.schema('api').rpc('tutti_amministratori');
     if (error) return setEsito({ ok: false, testo: error.message });
     const n = data as number;
@@ -122,7 +122,7 @@ export default function GestioneStaff({ claims, parte = 'tutto' }: { claims: Cla
             </ul>
           )}
           <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
-            <span className="flex-1">L'<b>amministratore</b> può fare tutto, cartelle cliniche e Allergologia comprese: nominalo con attenzione.
+            <span className="flex-1">L'<b>amministratore</b> può fare tutto, cartelle cliniche, Allergologia e Auxologia comprese: nominalo con attenzione.
               La segreteria non può essere amministratore. Per disattivare un amministratore togli prima il ruolo; solo un pediatra
               amministratore può toglierlo a un pediatra.</span>
             <Bottone onClick={() => void tuttiAmministratori()}>Fase di prova: tutti amministratori (tranne la segreteria)</Bottone>
@@ -136,10 +136,11 @@ export default function GestioneStaff({ claims, parte = 'tutto' }: { claims: Cla
             <label className="text-sm"><span className="block text-slate-500">Email (servirà per accedere)</span>
               <input required type="email" value={nuovo.email} onChange={(e) => setNuovo({ ...nuovo, email: e.target.value })} className={stileInput} /></label>
             <label className="text-sm"><span className="block text-slate-500">Ruolo</span>
-              <select value={nuovo.ruolo} onChange={(e) => setNuovo({ ...nuovo, ruolo: e.target.value as 'segreteria' | 'sostituto' | 'allergologo' })} className={stileInput}>
+              <select value={nuovo.ruolo} onChange={(e) => setNuovo({ ...nuovo, ruolo: e.target.value as 'segreteria' | 'sostituto' | 'allergologo' | 'auxologo' })} className={stileInput}>
                 <option value="segreteria">Segreteria (agenda, anagrafiche, consensi; cartelle solo se il pediatra lo consente)</option>
                 <option value="sostituto">Pediatra sostituto (dati clinici solo nei periodi di sostituzione)</option>
                 <option value="allergologo">Pediatra allergologo (solo modulo Allergologia)</option>
+                <option value="auxologo">Pediatra auxologo (solo modulo Auxologia)</option>
               </select></label>
             <div className="md:col-span-2"><Bottone type="submit" variante="primario" disabled={invio}>{invio ? 'Aggiunta…' : 'Aggiungi'}</Bottone></div>
           </form>

@@ -10,12 +10,33 @@ import { stileInput } from './Registro';
 
 type Bozza = Pick<ModelloAllergo, 'codice' | 'nome' | 'profilo' | 'sezione' | 'testo'> & { id?: string };
 
-function Editor({ bozza, studio, onFatto }: { bozza: Bozza; studio: string; onFatto: () => void }) {
+/** Tabelle e testi del modulo (stesso schema per Allergologia e Auxologia). */
+export interface ConfigReferto {
+  tabellaModelli: 'allergo_modelli' | 'auxo_modelli';
+  tabellaImpostazioni: 'allergo_impostazioni' | 'auxo_impostazioni';
+  profili: Record<string, string>;
+  profiloIniziale: string;
+  intestazione: string;
+  qualifica: string;
+  chiusura: string;
+  segnaposto: string;
+  nota: string;
+}
+
+export const CONFIG_ALLERGO: ConfigReferto = {
+  tabellaModelli: 'allergo_modelli', tabellaImpostazioni: 'allergo_impostazioni', profili: PROFILI, profiloIniziale: 'asma',
+  intestazione: 'Ambulatorio di Allergologia', qualifica: 'Allergologo pediatra',
+  chiusura: 'Per eventuali necessità e/o informazioni si consiglia di contattare la sottoscritta all\'indirizzo email: {{email}}, specificando nell\'oggetto «all\'attenzione di {{firma}}».',
+  segnaposto: '{{nome}} {{peso}} {{prossimo_controllo}}',
+  nota: `I modelli predefiniti sono ricavati dai referti dell'ambulatorio. «Personalizza» crea la versione dello studio, che da quel momento sostituisce il predefinito nelle visite. Modelli per tipo di bambino: ${PACCHETTI.map((x) => x.nome).join(', ')}.`,
+};
+
+function Editor({ bozza, studio, onFatto, cfg }: { bozza: Bozza; studio: string; onFatto: () => void; cfg: ConfigReferto }) {
   const [b, setB] = useState(bozza);
   const [errore, setErrore] = useState<string | null>(null);
   async function salva(e: FormEvent) {
     e.preventDefault();
-    const t = supabase.schema('anagrafica').from('allergo_modelli');
+    const t = supabase.schema('anagrafica').from(cfg.tabellaModelli);
     const dati = { nome: b.nome.trim(), profilo: b.profilo, sezione: b.sezione, testo: b.testo, aggiornato_il: new Date().toISOString() };
     const { error } = b.id ? await t.update(dati).eq('id', b.id) : await t.insert({ ...dati, codice: b.codice, studio_id: studio });
     if (error) setErrore(error.message); else onFatto();
@@ -27,13 +48,13 @@ function Editor({ bozza, studio, onFatto }: { bozza: Bozza; studio: string; onFa
         <input required value={b.nome} onChange={(e) => setB({ ...b, nome: e.target.value })} className={stileInput} /></label>
       <label><span className="block text-slate-500">Profilo</span>
         <select value={b.profilo} onChange={(e) => setB({ ...b, profilo: e.target.value })} className={stileInput}>
-          {Object.entries(PROFILI).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
+          {Object.entries(cfg.profili).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
         </select></label>
       <label><span className="block text-slate-500">Sezione del referto</span>
         <select value={b.sezione} onChange={(e) => setB({ ...b, sezione: e.target.value as Bozza['sezione'] })} className={stileInput}>
           {Object.entries(SEZIONI_MODELLO).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
         </select></label>
-      <p className="self-end text-xs text-slate-500">Segnaposto: {'{{nome}} {{peso}} {{prossimo_controllo}}'}</p>
+      <p className="self-end text-xs text-slate-500">Segnaposto: {cfg.segnaposto}</p>
       <label className="md:col-span-3"><span className="block text-slate-500">Testo (righe che iniziano con «-» = elenco puntato)</span>
         <textarea required rows={16} value={b.testo} onChange={(e) => setB({ ...b, testo: e.target.value })} className={`${stileInput} font-mono text-[13px]`} /></label>
       <div className="md:col-span-3"><Bottone type="submit" variante="primario">Salva modello</Bottone></div>
@@ -42,10 +63,10 @@ function Editor({ bozza, studio, onFatto }: { bozza: Bozza; studio: string; onFa
 }
 
 /** Modelli di testo: predefiniti (sola lettura) e personalizzati dello studio. */
-export function GestioneModelli({ claims }: { claims: ClaimsApp }) {
-  const modelli = useDati(() => q<ModelloAllergo[]>(supabase.schema('anagrafica').from('allergo_modelli').select('*').order('ordine')), []);
+export function GestioneModelli({ claims, cfg = CONFIG_ALLERGO }: { claims: ClaimsApp; cfg?: ConfigReferto }) {
+  const modelli = useDati(() => q<ModelloAllergo[]>(supabase.schema('anagrafica').from(cfg.tabellaModelli).select('*').order('ordine')), [cfg.tabellaModelli]);
   const [bozza, setBozza] = useState<Bozza | null>(null);
-  const [profilo, setProfilo] = useState('asma');
+  const [profilo, setProfilo] = useState(cfg.profiloIniziale);
 
   if (modelli.errore) return <Errore messaggio={modelli.errore} />;
   if (!modelli.dati) return <Caricamento />;
@@ -55,14 +76,14 @@ export function GestioneModelli({ claims }: { claims: ClaimsApp }) {
     .filter((m) => m.profilo === profilo);
 
   async function attiva(m: ModelloAllergo, attivo: boolean) {
-    await supabase.schema('anagrafica').from('allergo_modelli').update({ attivo }).eq('id', m.id);
+    await supabase.schema('anagrafica').from(cfg.tabellaModelli).update({ attivo }).eq('id', m.id);
     modelli.ricarica();
   }
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-1">
-        {Object.entries(PROFILI).map(([k, t]) => (
+        {Object.entries(cfg.profili).map(([k, t]) => (
           <button key={k} type="button" onClick={() => setProfilo(k)}
                   className={`rounded-full border px-3 py-1 text-sm ${profilo === k ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-300 text-slate-700'}`}>{t}</button>
         ))}
@@ -92,13 +113,10 @@ export function GestioneModelli({ claims }: { claims: ClaimsApp }) {
           );
         })}
       </ul>
-      <p className="text-xs text-slate-500">
-        I modelli predefiniti sono ricavati dai referti dell'ambulatorio. «Personalizza» crea la versione dello studio, che da quel momento
-        sostituisce il predefinito nelle visite. Modelli per tipo di bambino: {PACCHETTI.map((x) => x.nome).join(', ')}.
-      </p>
+      <p className="text-xs text-slate-500">{cfg.nota}</p>
       {bozza && claims.app_studio_id && (
         <Finestra titolo={bozza.id ? 'Modifica modello' : 'Nuovo modello'} onChiudi={() => setBozza(null)} larga>
-          <Editor bozza={bozza} studio={claims.app_studio_id} onFatto={() => { setBozza(null); modelli.ricarica(); }} />
+          <Editor cfg={cfg} bozza={bozza} studio={claims.app_studio_id} onFatto={() => { setBozza(null); modelli.ricarica(); }} />
         </Finestra>
       )}
     </div>
@@ -106,16 +124,13 @@ export function GestioneModelli({ claims }: { claims: ClaimsApp }) {
 }
 
 /** Intestazione, luogo, firma e contatti del referto (per medico). */
-export function ImpostazioniRefertoForm({ claims, onFatto }: { claims: ClaimsApp; onFatto?: () => void }) {
-  const dati = useDati(() => q<ImpostazioniReferto | null>(supabase.schema('anagrafica').from('allergo_impostazioni').select('*').eq('utente_id', claims.sub).maybeSingle()), [claims.sub]);
+export function ImpostazioniRefertoForm({ claims, onFatto, cfg = CONFIG_ALLERGO }: { claims: ClaimsApp; onFatto?: () => void; cfg?: ConfigReferto }) {
+  const dati = useDati(() => q<ImpostazioniReferto | null>(supabase.schema('anagrafica').from(cfg.tabellaImpostazioni).select('*').eq('utente_id', claims.sub).maybeSingle()), [claims.sub, cfg.tabellaImpostazioni]);
   const [v, setV] = useState<Partial<ImpostazioniReferto> | null>(null);
   const [esito, setEsito] = useState<{ ok: boolean; testo: string } | null>(null);
   if (dati.errore) return <Errore messaggio={dati.errore} />;
   if (dati.caricamento) return <Caricamento />;
-  const x: Partial<ImpostazioniReferto> = v ?? dati.dati ?? {
-    intestazione: 'Ambulatorio di Allergologia', qualifica: 'Allergologo pediatra',
-    chiusura: 'Per eventuali necessità e/o informazioni si consiglia di contattare la sottoscritta all\'indirizzo email: {{email}}, specificando nell\'oggetto «all\'attenzione di {{firma}}».',
-  };
+  const x: Partial<ImpostazioniReferto> = v ?? dati.dati ?? { intestazione: cfg.intestazione, qualifica: cfg.qualifica, chiusura: cfg.chiusura };
   const campo = (k: keyof ImpostazioniReferto, t: string, aiuto?: string) => (
     <label className="text-sm"><span className="block text-slate-500">{t}</span>
       <input value={String(x[k] ?? '')} onChange={(e) => setV({ ...x, [k]: e.target.value })} className={stileInput} />
@@ -124,20 +139,20 @@ export function ImpostazioniRefertoForm({ claims, onFatto }: { claims: ClaimsApp
   async function salva(e: FormEvent) {
     e.preventDefault();
     const riga = {
-      utente_id: claims.sub, studio_id: claims.app_studio_id, intestazione: x.intestazione?.trim() || 'Ambulatorio di Allergologia',
+      utente_id: claims.sub, studio_id: claims.app_studio_id, intestazione: x.intestazione?.trim() || cfg.intestazione,
       sottotitolo: x.sottotitolo?.trim() || null, luogo: x.luogo?.trim() || null, firma: x.firma?.trim() || null, qualifica: x.qualifica?.trim() || null,
       email_contatti: x.email_contatti?.trim() || null, chiusura: x.chiusura?.trim() || null,
       ordine_provincia: x.ordine_provincia?.trim() || null, ordine_numero: x.ordine_numero?.trim() || null, telefono: x.telefono?.trim() || null,
       aggiornato_il: new Date().toISOString(),
     };
-    const { error } = await supabase.schema('anagrafica').from('allergo_impostazioni').upsert(riga);
+    const { error } = await supabase.schema('anagrafica').from(cfg.tabellaImpostazioni).upsert(riga);
     setEsito(error ? { ok: false, testo: error.message } : { ok: true, testo: 'Impostazioni salvate.' });
     if (!error) { dati.ricarica(); onFatto?.(); }
   }
   return (
     <form onSubmit={(e) => void salva(e)} className="grid gap-3 md:grid-cols-2">
       {esito && <p className={`md:col-span-2 rounded-lg p-2 text-sm ${esito.ok ? 'bg-emerald-50 text-emerald-900' : 'bg-red-50 text-red-900'}`}>{esito.testo}</p>}
-      {campo('intestazione', 'Intestazione', 'Es. Ambulatorio di Allergologia')}
+      {campo('intestazione', 'Intestazione', `Es. ${cfg.intestazione}`)}
       {campo('sottotitolo', 'Sottotitolo', 'Es. U.O. di Pediatria')}
       {campo('luogo', 'Luogo (prima della data)', 'Es. Catanzaro')}
       {campo('firma', 'Firma', 'Es. Dott.ssa Maria Rossi')}

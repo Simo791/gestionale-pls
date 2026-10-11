@@ -1,3 +1,4 @@
+import type { ClaimsApp } from '@pls/shared';
 import { useEffect, useState } from 'react';
 
 /**
@@ -5,7 +6,7 @@ import { useEffect, useState } from 'react';
  * niente librerie aggiuntive, il tasto "indietro" del browser funziona e
  * ogni pagina ha un indirizzo che si può salvare nei preferiti.
  */
-export type Sezione = 'cruscotto' | 'agenda' | 'assistiti' | 'allergologia' | 'consensi' | 'registro' | 'patologie' | 'amministrazione' | 'account';
+export type Sezione = 'cruscotto' | 'agenda' | 'assistiti' | 'allergologia' | 'auxologia' | 'consensi' | 'registro' | 'patologie' | 'amministrazione' | 'account';
 
 export interface Rotta {
   sezione: Sezione;
@@ -14,7 +15,7 @@ export interface Rotta {
   azione?: string;
 }
 
-const SEZIONI: readonly Sezione[] = ['cruscotto', 'agenda', 'assistiti', 'allergologia', 'consensi', 'registro', 'patologie', 'amministrazione', 'account'];
+const SEZIONI: readonly Sezione[] = ['cruscotto', 'agenda', 'assistiti', 'allergologia', 'auxologia', 'consensi', 'registro', 'patologie', 'amministrazione', 'account'];
 
 function leggi(): Rotta {
   const [sezione, id, azione] = window.location.hash.replace(/^#\/?/, '').split('/');
@@ -40,3 +41,11 @@ export function useRotta(): Rotta {
 
 export const link = (sezione: Sezione, id?: string, azione?: string) =>
   `#/${sezione}${id ? `/${id}` : ''}${id && azione ? `/${azione}` : ''}`;
+
+/** Specialista non amministratore: l'unica sezione (oltre all'account) che può usare. */
+export function sezioneSpecialista(claims: ClaimsApp): Sezione | null {
+  if (claims.app_admin) return null;
+  if (claims.app_ruolo === 'allergologo') return 'allergologia';
+  if (claims.app_ruolo === 'auxologo') return 'auxologia';
+  return null;
+}

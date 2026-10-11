@@ -11,11 +11,13 @@ export interface ClaimsApp {
   app_admin: boolean;
   /** Vede la sezione Allergologia (modulo attivo + amministratore o allergologo accettato). */
   app_allergologia: boolean;
+  /** Vede la sezione Auxologia (modulo attivo + amministratore o auxologo accettato). */
+  app_auxologia: boolean;
   /** Segreteria autorizzata da un pediatra a consultare le cartelle (sola lettura). */
   app_cartelle: boolean;
 }
 
-const RUOLI: readonly RuoloApp[] = ['pediatra', 'segreteria', 'sostituto', 'allergologo', 'tutore', 'nessuno'];
+const RUOLI: readonly RuoloApp[] = ['pediatra', 'segreteria', 'sostituto', 'allergologo', 'auxologo', 'tutore', 'nessuno'];
 
 /**
  * Legge i claim dal token di accesso SENZA verificarne la firma.
@@ -40,8 +42,9 @@ export function leggiClaims(accessToken: string): ClaimsApp | null {
       aal: dati.aal === 'aal2' ? 'aal2' : 'aal1',
       app_ruolo: ruolo,
       app_studio_id: typeof dati.app_studio_id === 'string' ? dati.app_studio_id : undefined,
-      app_admin: dati.app_admin === true && (ruolo === 'pediatra' || ruolo === 'sostituto' || ruolo === 'allergologo'),
+      app_admin: dati.app_admin === true && (ruolo === 'pediatra' || ruolo === 'sostituto' || ruolo === 'allergologo' || ruolo === 'auxologo'),
       app_allergologia: dati.app_allergologia === true && ruolo !== 'tutore' && ruolo !== 'segreteria',
+      app_auxologia: dati.app_auxologia === true && ruolo !== 'tutore' && ruolo !== 'segreteria',
       app_cartelle: dati.app_cartelle === true && ruolo === 'segreteria',
     };
   } catch {
@@ -52,8 +55,11 @@ export function leggiClaims(accessToken: string): ClaimsApp | null {
 export const isStaff = (ruolo: RuoloApp): boolean =>
   ruolo === 'pediatra' || ruolo === 'segreteria' || ruolo === 'sostituto';
 
-/** Chi può usare l'app dello studio: lo staff e l'allergologo (solo modulo Allergologia). */
-export const usaAppStudio = (ruolo: RuoloApp): boolean => isStaff(ruolo) || ruolo === 'allergologo';
+/** Specialisti che usano solo il proprio modulo (salvo siano amministratori). */
+export const isSpecialista = (ruolo: RuoloApp): boolean => ruolo === 'allergologo' || ruolo === 'auxologo';
+
+/** Chi può usare l'app dello studio: lo staff e gli specialisti (solo il proprio modulo). */
+export const usaAppStudio = (ruolo: RuoloApp): boolean => isStaff(ruolo) || isSpecialista(ruolo);
 
 /**
  * Tutto lo staff usa il secondo fattore (TOTP). Per i dati clinici è il database

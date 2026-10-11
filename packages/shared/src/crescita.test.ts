@@ -10,8 +10,9 @@ describe('curve OMS', () => {
     expect(vicino(valoreDaZ(lms, 1.880794), 4.4, 0.06)).toBe(true);
   });
 
-  it('altezza a 24 mesi, femmine: mediana circa 86 cm', () => {
-    expect(vicino(valoreDaZ(lmsAEta('altezza', 'F', 24)!, 0), 86.4, 0.3)).toBe(true);
+  it('altezza a 24 mesi, femmine: lunghezza 86,4 cm fino a 23,99 mesi, statura in piedi 85,7 cm da 24 mesi (OMS)', () => {
+    expect(vicino(valoreDaZ(lmsAEta('altezza', 'F', 23.99)!, 0), 86.4, 0.05)).toBe(true);
+    expect(vicino(valoreDaZ(lmsAEta('altezza', 'F', 24)!, 0), 85.73, 0.05)).toBe(true);
   });
 
   it('collega standard 0–5 anni e reference 2007 senza buchi', () => {
